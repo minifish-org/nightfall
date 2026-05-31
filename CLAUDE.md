@@ -111,8 +111,8 @@ AGENTD_CLI=/Users/yusp/work/agentd/target/debug/agentd-cli pnpm agents:register
 pnpm smoke                                 # POST one sample turn, print final_decision
 ```
 
-Default tenant is **`demo`** (where agentd's `publish-local.sh` puts the shared
-`simple-bot` wasm — no extra publish needed). Local agentd is
+Default tenant is **`demo`**. Seat manifests run on agentd's built-in generic
+agent (`builtin://generic-agent`) — no wasm to publish. Local agentd is
 `http://127.0.0.1:8080`; production is over Tailscale. Override with
 `--tenant` / `--base-url` (CLI) or `VITE_AGENTD_URL` / `VITE_AGENTD_TENANT`
 (browser). agentd has permissive CORS so the browser connects directly.

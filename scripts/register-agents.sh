@@ -9,8 +9,9 @@
 #   # ...or, if you have an installed binary:
 #   AGENTD_CLI="agentd-cli"
 #
-# Prerequisite: the shared generic wasm must already be published into this
-# tenant's artifact store (see README "Publish the shared wasm").
+# No prerequisite wasm: the seat manifests use agentd's built-in native generic
+# agent (artifact_uri = "builtin://generic-agent"); the persona + model live in
+# each manifest. agentd just needs to be running with its tool catalog seeded.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

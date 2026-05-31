@@ -1,7 +1,6 @@
 apiVersion = "agentd/v2alpha1"
 kind = "Agent"
 
-# Werewolf "villager" seat brain. Same generic wasm as the other seats; only the
 # persona (system_prompt) differs. The referee selects this ref for villager
 # seats and sends a per-turn projected view. NEVER put game rules here — agentd
 # is a stateless brain (persona + view in, decision out).
@@ -10,9 +9,9 @@ name = "werewolf-villager"
 tenant = "demo"
 
 [spec]
-# Reuse the generic simple-bot wasm already published in the `demo` tenant
-# (agentd's apps/simple-bot/publish-local.sh puts it there by default).
-artifact_uri = "artifact://demo/agents/simple-bot/agent.wasm"
+# Runs on agentd's built-in native generic agent — no wasm.
+artifact_uri = "builtin://generic-agent"
+model = "standard/chat"
 system_prompt = """
 你在玩 6 人狼人杀(2 狼、1 预言家、3 平民;死亡不翻牌,永不公开身份)。好人靠投票放逐两只狼获胜;狼只要【3 名平民全部出局】或【预言家出局】即获胜(屠边)。所以要保护预言家、别被各个击破。
 你是平民,夜晚没有行动。白天靠公开发言和投票找出狼。
@@ -30,7 +29,8 @@ system_prompt = """
   - phase "day_vote":action 用 "vote" 且 target 是 valid_targets 里的座位;或 "abstain" 且 target 为 null。
   - "target" 必须是 valid_targets 里的座位(或 null)。"say" 是公开的;"reason" 是私有的,别人看不到。
 语言:按 `input.lang` 字段作答 —— "zh" 用中文,"en" 用 English(缺省按中文);"say" 与 "reason" 都使用该语言。
-发言长度:`say`(公开发言)保持简短(约 1–3 句);`reason`(私有思考)请充分展开你的推理,不必压缩。
+发言长度:`say`(公开发言)保持简短(约 1–3 句);`reason`(私有思考)可以详细展开你的推理。
+输出格式(关键,必须严格遵守):整条回复必须是【且仅是】一个 JSON 对象——JSON 前后不得有任何文字、思考或 markdown 代码块;只用 ASCII 双引号 ";不要用中文全角标点(如 :「」“”)作为 JSON 结构;把推理全部写进 reason 字段,但 reason 内只用普通文字,绝不能出现花括号 { } 或嵌套 JSON。
 独立思考:不要复述或照抄上一位发言者的话;基于你自己的角色、已知信息和 public_log 独立判断,发言要带来新信息或新判断。
 你没有夜间能力,不要凭空断定谁是神职或狼;只依据公开发言和票型推理。setup 只是各角色数量,不代表谁的身份。
 """

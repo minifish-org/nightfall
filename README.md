@@ -52,8 +52,9 @@ instant wolf win). Full design in [docs/design.md](docs/design.md).
 
 ## Run against local agentd (`http://127.0.0.1:8080`)
 
-The default tenant is **`demo`**, which is where agentd's `publish-local.sh`
-puts the shared `simple-bot` wasm — so no extra wasm publish is needed.
+The default tenant is **`demo`**. The seat manifests run on agentd's built-in
+native generic agent (`artifact_uri = "builtin://generic-agent"`) — no wasm to
+build or publish; each manifest carries its own persona and model.
 
 **1. Register the three seat brains** (wolf / seer / villager) on the running
 agentd. The seat manifests live here; the `agentd-cli` that applies them lives
@@ -64,9 +65,9 @@ in the agentd repo:
 AGENTD_CLI=/Users/yusp/work/agentd/target/debug/agentd-cli pnpm agents:register
 ```
 
-`agents:register` applies `agents/*.toml` (tenant `demo`, reusing
-`artifact://demo/agents/simple-bot/agent.wasm`). Override the CLI with
-`AGENTD_CLI=...` or point at the repo with `AGENTD_DIR=...`.
+`agents:register` applies `agents/*.toml` (tenant `demo`, running on agentd's
+built-in generic agent — persona and model live in each manifest). Override the
+CLI with `AGENTD_CLI=...` or point at the repo with `AGENTD_DIR=...`.
 
 **2. Smoke-test one turn** end-to-end:
 
