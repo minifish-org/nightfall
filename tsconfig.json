@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": ["vitest/globals", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@engine": ["engine/index.ts"],
+      "@engine/*": ["engine/*"],
+      "@agentd": ["agentd-client/index.ts"],
+      "@agentd/*": ["agentd-client/*"],
+      "@orchestrator": ["orchestrator/index.ts"],
+      "@orchestrator/*": ["orchestrator/*"]
+    }
+  },
+  "include": ["engine", "agentd-client", "orchestrator", "app", "scripts", "vite.config.ts"]
+}

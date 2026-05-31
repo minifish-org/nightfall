@@ -1,0 +1,5 @@
+# Single-package repo for now. The engine/ and agentd-client/ directories are
+# kept framework-free so they can later be promoted to standalone workspace
+# packages (and reused inside a Cloudflare Durable Object) without rewrites.
+packages:
+  - "."

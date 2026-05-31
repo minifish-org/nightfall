@@ -1,0 +1,156 @@
+import type { Action, Faction, GameState, Phase, ResolutionEvent, Role } from "@engine";
+
+export type Lang = "zh" | "en";
+
+export const ROLE_NAME: Record<Lang, Record<Role, string>> = {
+  zh: { wolf: "狼", seer: "预言家", villager: "平民" },
+  en: { wolf: "wolf", seer: "seer", villager: "villager" },
+};
+
+export const ACTION_NAME: Record<Lang, Record<Action, string>> = {
+  zh: { check: "查验", kill: "刀", speak: "发言", vote: "投票", abstain: "弃票" },
+  en: { check: "check", kill: "kill", speak: "speak", vote: "vote", abstain: "abstain" },
+};
+
+export const PHASE_LABEL: Record<Lang, Record<Phase, string>> = {
+  zh: {
+    night_seer: "🔮 夜 · 预言家",
+    night_wolf: "🐺 夜 · 狼人",
+    day_discuss: "💬 昼 · 讨论",
+    day_vote: "🗳️ 昼 · 投票",
+    game_over: "🏁 对局结束",
+  },
+  en: {
+    night_seer: "🔮 Night · Seer",
+    night_wolf: "🐺 Night · Wolves",
+    day_discuss: "💬 Day · Discussion",
+    day_vote: "🗳️ Day · Vote",
+    game_over: "🏁 Game over",
+  },
+};
+
+/** Static UI strings + a few small formatters, keyed by language. */
+export const UI = {
+  zh: {
+    title: "🐺 Nightfall — AI 狼人杀观赛",
+    subtitle:
+      "浏览器即裁判:持有全量状态、按阶段 FSM 推进,并以每个座位的「投影视图」调用 agentd。本页渲染上帝视角——两者从不混淆。",
+    cfgLegend: "配置",
+    baseUrl: "agentd 地址",
+    tenant: "租户 tenant",
+    seed: "随机种子",
+    stepDelay: "每步间隔 (ms)",
+    language: "语言(界面/AI 输出)",
+    agentRefSuffix: "agent_ref",
+    start: "▶ 开始",
+    restart: "↻ 重开",
+    pause: "⏸ 暂停",
+    resume: "▶ 继续",
+    step: "⏯ 单步",
+    stepTip: "暂停并只推进一步",
+    stop: "⏹ 停止",
+    status: "状态",
+    seats: "座位",
+    noGame: "暂无对局。",
+    diedPrefix: "死亡",
+    timeline: "时间线",
+    startHint: "点「开始」对着 agentd 跑一局。",
+    acting: "行动",
+    seat: "座位",
+    fallback: "降级",
+    dayWord: "第",
+    dayUnit: "天",
+    phaseWord: "阶段",
+    unreachableHint: (url: string) => `agentd 是否在 ${url} 运行、且已注册三个 agent?`,
+  },
+  en: {
+    title: "🐺 Nightfall — AI Werewolf spectator",
+    subtitle:
+      "Browser is the referee: it holds full state, runs the phase FSM, and calls agentd with each seat's projected view. This page renders the god view — the two never mix.",
+    cfgLegend: "Config",
+    baseUrl: "agentd baseUrl",
+    tenant: "tenant",
+    seed: "seed",
+    stepDelay: "step delay (ms)",
+    language: "Language (UI / AI output)",
+    agentRefSuffix: "agent_ref",
+    start: "▶ Start",
+    restart: "↻ Restart",
+    pause: "⏸ Pause",
+    resume: "▶ Resume",
+    step: "⏯ Step",
+    stepTip: "Pause and advance one step",
+    stop: "⏹ Stop",
+    status: "status",
+    seats: "Seats",
+    noGame: "No game yet.",
+    diedPrefix: "died",
+    timeline: "Timeline",
+    startHint: "Press Start to run a game against agentd.",
+    acting: "acting",
+    seat: "Seat",
+    fallback: "fallback",
+    dayWord: "Day",
+    dayUnit: "",
+    phaseWord: "phase",
+    unreachableHint: (url: string) => `Is agentd reachable at ${url} with the three agents registered?`,
+  },
+} as const;
+
+const roleOf = (game: GameState, seat: number): Role | null => game.seats.find((s) => s.seat === seat)?.role ?? null;
+/** "3(狼)" / "3(wolf)" — god-view seat tag. */
+export function tag(game: GameState, seat: number, lang: Lang): string {
+  const r = roleOf(game, seat);
+  return r ? `${seat}(${ROLE_NAME[lang][r]})` : `${seat}`;
+}
+
+/** Localized resolution line for the god-view timeline. null = not shown. */
+export function resolutionText(
+  game: GameState,
+  e: ResolutionEvent,
+  lang: Lang,
+): { text: string; tone: "kill" | "info" | "safe" } | null {
+  const zh = lang === "zh";
+  switch (e.type) {
+    case "seer_check":
+      return {
+        tone: "info",
+        text: zh
+          ? `🔮 预言家 ${tag(game, e.seat, lang)} 查验 ${tag(game, e.target, lang)} → ${e.result === "wolf" ? "狼" : "好人"}`
+          : `🔮 Seer ${tag(game, e.seat, lang)} checked ${tag(game, e.target, lang)} → ${e.result.toUpperCase()}`,
+      };
+    case "night_kill":
+      if (e.victim === null) return { tone: "safe", text: zh ? "🌙 今夜无人死亡" : "🌙 No one was killed" };
+      return {
+        tone: "kill",
+        text: zh
+          ? `🔪 狼人刀了 ${tag(game, e.victim, lang)}${e.tie ? "(平票→按种子)" : ""}`
+          : `🔪 Wolves killed seat ${tag(game, e.victim, lang)}${e.tie ? " (tie → seeded)" : ""}`,
+      };
+    case "banish": {
+      const tally = Object.entries(e.tally).map(([s, n]) => `${s}:${n}`).join("  ") || "—";
+      if (e.victim === null)
+        return {
+          tone: "safe",
+          text: zh
+            ? `⚖️ 无人被放逐 · 票数 ${tally} · 弃票 ${e.abstains}`
+            : `⚖️ No banishment · votes ${tally} · abstain ${e.abstains}`,
+        };
+      return {
+        tone: "kill",
+        text: zh
+          ? `⚖️ 放逐了 ${tag(game, e.victim, lang)} · 票数 ${tally} · 弃票 ${e.abstains}${e.tie ? "(平票→按种子)" : ""}`
+          : `⚖️ Banished seat ${tag(game, e.victim, lang)} · votes ${tally} · abstain ${e.abstains}${e.tie ? " (tie → seeded)" : ""}`,
+      };
+    }
+    case "death":
+    case "phase_advance":
+    case "game_over":
+      return null;
+  }
+}
+
+export function winnerText(winner: Faction, lang: Lang): string {
+  if (lang === "zh") return `🏁 ${winner === "wolf" ? "狼人" : "好人"}阵营获胜`;
+  return `🏁 ${winner.toUpperCase()} wins`;
+}

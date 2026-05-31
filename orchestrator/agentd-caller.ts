@@ -1,0 +1,62 @@
+import { AgentdClient } from "../agentd-client/index.js";
+import { roleAgentRef, seatScope } from "../engine/index.js";
+import type { Action, Decision, Role } from "../engine/index.js";
+import type { AgentCaller } from "./types.js";
+
+const ACTIONS: ReadonlySet<Action> = new Set(["check", "kill", "speak", "vote", "abstain"]);
+
+export interface AgentdCallerConfig {
+  client: AgentdClient;
+  /** Feeds the seat scope game/<gameId>/seat/<n>. */
+  gameId: string;
+  /** Optional role → agent_ref overrides (the UI's agent_ref pool). */
+  pool?: Partial<Record<Role, string>>;
+  timeoutMs?: number;
+  /**
+   * Language tag the agent should reply in, sent inside payload.input as
+   * `input.lang`. The (registered-once) persona is instructed to honor it, so
+   * switching language needs NO agent re-registration. Defaults to "zh".
+   */
+  lang?: string;
+}
+
+/**
+ * Concrete AgentCaller backed by a live agentd. Sends the projected view as
+ * `payload.input` (the shape the simple-bot wasm reads) and coerces the emitted
+ * final_decision into a Decision. Throws on an unusable response so the
+ * orchestrator degrades and marks the step as errored.
+ */
+export function createAgentdCaller(cfg: AgentdCallerConfig): AgentCaller {
+  return async ({ seat, role, view }) => {
+    const agentRef = roleAgentRef(role, cfg.pool);
+    const scope = seatScope(cfg.gameId, seat);
+    const res = await cfg.client.submitTurn({
+      agentRef,
+      scope,
+      // `lang` rides inside `input` because the simple-bot wasm forwards only
+      // payload.input to the model (sibling fields are dropped).
+      payload: { input: { ...view, lang: cfg.lang ?? "zh" } },
+      wait: true,
+      ...(cfg.timeoutMs !== undefined ? { timeoutMs: cfg.timeoutMs } : {}),
+    });
+    if (res.timedOut) throw new Error(`seat ${seat} timed out`);
+    return toDecision(res.finalDecision);
+  };
+}
+
+/** Map a tolerantly-decoded final_decision into a strict Decision, or throw. */
+function toDecision(raw: Record<string, unknown> | null): Decision {
+  if (!raw) throw new Error("agent emitted no decision");
+  const action = raw.action;
+  if (typeof action !== "string" || !ACTIONS.has(action as Action)) {
+    throw new Error(`agent emitted no valid action (got ${JSON.stringify(action)})`);
+  }
+  const target =
+    typeof raw.target === "number" ? raw.target : raw.target === null ? null : null;
+  return {
+    action: action as Action,
+    target,
+    say: typeof raw.say === "string" ? raw.say : "",
+    reason: typeof raw.reason === "string" ? raw.reason : "",
+  };
+}
