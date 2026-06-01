@@ -5,6 +5,7 @@ import type { Faction, GameState } from "@engine";
 import { createAgentdCaller, runGame } from "@orchestrator";
 import type { Observer } from "@orchestrator";
 import type { SpectatorConfig } from "./config.js";
+import type { ConnectionSettings } from "./settings.js";
 import { Pacer } from "./pacer.js";
 import { resolutionText } from "./i18n.js";
 import type { TimelineItem } from "./timeline.js";
@@ -43,7 +44,7 @@ export function useGameRunner() {
   }, []);
 
   const start = useCallback(
-    (config: SpectatorConfig) => {
+    (config: SpectatorConfig, connection: ConnectionSettings) => {
       abortRef.current?.abort();
       const pacer = new Pacer(config.stepDelayMs, false);
       const abort = new AbortController();
@@ -57,7 +58,11 @@ export function useGameRunner() {
       const game = createGame(config.seed, `g${config.seed}-${Date.now().toString(36)}`);
       setState({ status: "running", game, timeline: [], winner: null, error: null });
 
-      const client = new AgentdClient({ baseUrl: config.baseUrl, tenant: config.tenant });
+      const client = new AgentdClient({
+        baseUrl: connection.baseUrl,
+        tenant: connection.tenant,
+        token: connection.token,
+      });
       const agentCaller = createAgentdCaller({ client, gameId: game.game_id, pool: config.pool, lang: config.lang });
       const lang = config.lang;
 

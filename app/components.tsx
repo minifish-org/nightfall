@@ -34,10 +34,6 @@ export function ConfigForm({
           <option value="zh">中文</option>
           <option value="en">English</option>
         </select>
-        <label>{t.baseUrl}</label>
-        <input value={config.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} />
-        <label>{t.tenant}</label>
-        <input value={config.tenant} onChange={(e) => set("tenant", e.target.value)} />
         <label>{t.seed}</label>
         <input type="number" value={config.seed} onChange={(e) => set("seed", Number(e.target.value))} />
         <label>{t.stepDelay}</label>

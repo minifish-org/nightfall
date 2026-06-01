@@ -21,8 +21,9 @@ function arg(name: string, fallback?: string): string | undefined {
 }
 
 const seed = Number(arg("seed", "1"));
-const baseUrl = arg("base-url", process.env.AGENTD_URL ?? "http://127.0.0.1:8080")!;
-const tenant = arg("tenant", process.env.AGENTD_TENANT ?? "demo")!;
+const baseUrl = arg("base-url", process.env.AGENTD_BASE_URL ?? process.env.AGENTD_URL ?? "http://127.0.0.1:8080")!;
+const tenant = arg("tenant", process.env.AGENTD_TENANT ?? "werewolf")!;
+const token = arg("token", process.env.AGENTD_TOKEN ?? "")!;
 const timeoutMs = Number(arg("timeout-ms", "60000"));
 if (!Number.isFinite(seed)) {
   console.error("usage: pnpm play --seed <number> [--base-url URL] [--tenant T]");
@@ -95,7 +96,7 @@ const observer: Observer = {
   },
 };
 
-const client = new AgentdClient({ baseUrl, tenant, defaultTimeoutMs: timeoutMs });
+const client = new AgentdClient({ baseUrl, tenant, token, defaultTimeoutMs: timeoutMs });
 // Unique game_id per run → fresh agentd scope (no context bleed across runs of
 // the same seed). Engine replay depends only on (seed, decisions), not game_id.
 const state = createGame(seed, `g${seed}-${Date.now().toString(36)}`);

@@ -2,10 +2,12 @@ import { ROLE_AGENT_REF } from "@engine";
 import type { Role } from "@engine";
 import type { Lang } from "./i18n.js";
 
-/** Spectator-page configuration (all fields editable in the UI). */
+/**
+ * Per-game spectator config (seed / pacing / language / agent_ref pool).
+ * agentd CONNECTION (baseUrl / token / tenant) lives separately in
+ * settings.ts (persisted), edited in the Settings panel.
+ */
 export interface SpectatorConfig {
-  baseUrl: string;
-  tenant: string;
   seed: number;
   /** Delay between steps in autoplay, ms. */
   stepDelayMs: number;
@@ -16,8 +18,6 @@ export interface SpectatorConfig {
 }
 
 export const DEFAULT_CONFIG: SpectatorConfig = {
-  baseUrl: import.meta.env.VITE_AGENTD_URL ?? "http://127.0.0.1:8080",
-  tenant: import.meta.env.VITE_AGENTD_TENANT ?? "demo",
   seed: 1,
   stepDelayMs: 800,
   lang: "zh",
