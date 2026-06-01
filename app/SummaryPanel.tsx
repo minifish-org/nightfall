@@ -3,7 +3,7 @@ import { AgentdClient } from "@agentd";
 import type { GameState, Role } from "@engine";
 import { ROLE_NAME, UI, winnerText, type Lang } from "./i18n.js";
 import type { ConnectionSettings } from "./settings.js";
-import { buildRecap, seatFate, voteMvp, type MvpResult } from "./summary.js";
+import { buildRecap, seatFate, tallyVotes, voteMvp, type MvpResult } from "./summary.js";
 import type { TimelineItem } from "./timeline.js";
 
 const ROLE_EMOJI: Record<Role, string> = { wolf: "🐺", seer: "🔮", villager: "🧑‍🌾" };
@@ -25,29 +25,62 @@ export function SummaryPanel({
   timeline,
   connection,
   showRoles,
+  humanSeat,
 }: {
   lang: Lang;
   game: GameState;
   timeline: TimelineItem[];
   connection: ConnectionSettings;
   showRoles: boolean;
+  humanSeat: number | null;
 }) {
   const t = UI[lang];
   const [result, setResult] = useState<MvpResult | null>(null);
   const [voting, setVoting] = useState(false);
+  const [hBest, setHBest] = useState<number | null>(null);
+  const [hWorst, setHWorst] = useState<number | null>(null);
+  const [hReason, setHReason] = useState("");
   const recap = buildRecap(timeline, lang);
+  const seatNums = game.seats.map((s) => s.seat);
+  const humanReady = humanSeat === null || (hBest !== null && hWorst !== null);
 
   const runVote = async () => {
     setVoting(true);
     setResult(null);
     try {
       const client = new AgentdClient({ baseUrl: connection.baseUrl, tenant: connection.tenant, token: connection.token });
-      setResult(await voteMvp(client, game, timeline, lang));
+      const aiVotes = await voteMvp(client, game, timeline, lang, humanSeat);
+      const votes = [...aiVotes];
+      // The local human casts their OWN ballot — never the AI on their behalf.
+      if (humanSeat !== null && hBest !== null && hWorst !== null) {
+        votes.push({ voter: humanSeat, best: hBest, worst: hWorst, reason: hReason.trim(), human: true });
+      }
+      setResult({ votes, ...tallyVotes(votes) });
     } catch {
       setResult({ votes: [], bestTally: [], worstTally: [] });
     }
     setVoting(false);
   };
+
+  const SeatRow = ({ label, picked, onPick }: { label: string; picked: number | null; onPick: (n: number) => void }) => (
+    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", margin: "2px 0" }}>
+      <span style={{ fontSize: 13, width: 36 }}>{label}</span>
+      {seatNums.map((n) => (
+        <button
+          key={n}
+          onClick={() => onPick(n)}
+          style={{
+            padding: "2px 8px",
+            border: picked === n ? "2px solid #2563eb" : "1px solid #aaa",
+            borderRadius: 6,
+            background: picked === n ? "#dbeafe" : "#fff",
+          }}
+        >
+          {n}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div style={{ border: "1px solid #c9a227", background: "#fffdf5", borderRadius: 8, padding: 12, margin: "8px 0" }}>
@@ -65,10 +98,27 @@ export function SummaryPanel({
         ))}
       </div>
 
-      {/* AI peer vote */}
+      {/* the local human casts their own ballot (not the AI on their behalf) */}
+      {humanSeat !== null && (
+        <div style={{ border: "1px dashed #2563eb", borderRadius: 6, padding: "6px 8px", margin: "6px 0", background: "#f5f8ff" }}>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>
+            🙋 {t.yourBallot} {humanSeat})
+          </div>
+          <SeatRow label={`🏆${t.yourBest}`} picked={hBest} onPick={setHBest} />
+          <SeatRow label={`💩${t.yourWorst}`} picked={hWorst} onPick={setHWorst} />
+          <input
+            value={hReason}
+            onChange={(e) => setHReason(e.target.value)}
+            placeholder={t.yourTake}
+            style={{ width: "100%", boxSizing: "border-box", marginTop: 4 }}
+          />
+        </div>
+      )}
+
+      {/* run the vote (human ballot + AI ballots) */}
       <div>
-        <button onClick={runVote} disabled={voting}>
-          {voting ? t.voting : t.mvpVote}
+        <button onClick={runVote} disabled={voting || !humanReady}>
+          {voting ? t.voting : humanSeat !== null ? t.submitAndVote : t.mvpVote}
         </button>
         {result &&
           (result.votes.length === 0 ? (
@@ -83,8 +133,9 @@ export function SummaryPanel({
               </div>
               <ul style={{ fontSize: 12, color: "#555", margin: "4px 0" }}>
                 {result.votes.map((v) => (
-                  <li key={v.voter}>
-                    {t.seat} {v.voter} → 🏆{v.best} 💩{v.worst}
+                  <li key={v.voter} style={v.human ? { fontWeight: 600 } : undefined}>
+                    {t.seat} {v.voter}
+                    {v.human ? ` ${t.youTag}` : ""} → 🏆{v.best} 💩{v.worst}
                     {v.reason ? ` · ${v.reason}` : ""}
                   </li>
                 ))}

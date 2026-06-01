@@ -58,6 +58,7 @@ export interface MvpVote {
   best: number;
   worst: number;
   reason: string;
+  human?: boolean;
 }
 export interface MvpResult {
   votes: MvpVote[];
@@ -65,25 +66,38 @@ export interface MvpResult {
   worstTally: { seat: number; count: number }[];
 }
 
+/** Tally best/worst counts from a set of ballots (AI + the human's own). */
+export function tallyVotes(votes: MvpVote[]): Pick<MvpResult, "bestTally" | "worstTally"> {
+  const tally = (pick: (v: MvpVote) => number) => {
+    const m = new Map<number, number>();
+    for (const v of votes) m.set(pick(v), (m.get(pick(v)) ?? 0) + 1);
+    return [...m.entries()].map(([seat, count]) => ({ seat, count })).sort((a, b) => b.count - a.count);
+  };
+  return { bestTally: tally((v) => v.best), worstTally: tally((v) => v.worst) };
+}
+
 /**
- * Peer vote: each seat casts one MVP/worst ballot via a one-off agentd turn
- * (system_prompt override turns the generic agent into a judge — no new agent
- * registration). Runs concurrently; ballots that don't parse are skipped.
+ * AI peer vote: each AI seat casts one MVP/worst ballot via a one-off agentd
+ * turn (system_prompt override turns the generic agent into a judge — no new
+ * agent registration). The local human seat is SKIPPED here — the human casts
+ * their own ballot in the UI. Runs concurrently; unparseable ballots skipped.
  */
 export async function voteMvp(
   client: AgentdClient,
   game: GameState,
   timeline: TimelineItem[],
   lang: Lang,
-): Promise<MvpResult> {
+  skipSeat?: number | null,
+): Promise<MvpVote[]> {
   const seats = game.seats.map((s) => ({ seat: s.seat, role: ROLE_NAME[lang][s.role], fate: seatFate(game, s.seat, lang) }));
   const events = buildRecap(timeline, lang);
   const winner = game.winner;
   const prompt = mvpPrompt(lang);
   const seatNums = game.seats.map((s) => s.seat);
+  const voters = game.seats.filter((s) => s.seat !== skipSeat);
 
   const ballots = await Promise.all(
-    game.seats.map(async (s) => {
+    voters.map(async (s) => {
       try {
         const res = await client.submitTurn({
           agentRef: roleAgentRef(s.role),
@@ -102,11 +116,5 @@ export async function voteMvp(
     }),
   );
 
-  const votes = ballots.filter((b): b is MvpVote => b !== null);
-  const tally = (pick: (v: MvpVote) => number) => {
-    const m = new Map<number, number>();
-    for (const v of votes) m.set(pick(v), (m.get(pick(v)) ?? 0) + 1);
-    return [...m.entries()].map(([seat, count]) => ({ seat, count })).sort((a, b) => b.count - a.count);
-  };
-  return { votes, bestTally: tally((v) => v.best), worstTally: tally((v) => v.worst) };
+  return ballots.filter((b): b is MvpVote => b !== null);
 }

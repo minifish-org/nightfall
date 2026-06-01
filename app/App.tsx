@@ -111,6 +111,7 @@ export function App() {
             timeline={runner.timeline}
             connection={connection}
             showRoles={mode === "god" || revealed}
+            humanSeat={config.humanSeat}
           />
         </>
       )}

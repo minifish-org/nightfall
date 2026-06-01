@@ -93,6 +93,12 @@ export const UI = {
     votesUnit: "票",
     mvpNoVotes: "没有有效票(模型未返回可用结果)",
     recapEvents: "逐回合复盘",
+    yourBallot: "你的一票(座位",
+    yourBest: "最佳",
+    yourWorst: "最差",
+    yourTake: "你的点评(可空)",
+    submitAndVote: "提交我的票并让 AI 评选",
+    youTag: "(你)",
   },
   en: {
     title: "🐺 Nightfall — AI Werewolf spectator",
@@ -156,6 +162,12 @@ export const UI = {
     votesUnit: "votes",
     mvpNoVotes: "No valid votes (the model returned nothing usable)",
     recapEvents: "Round-by-round recap",
+    yourBallot: "Your ballot (seat",
+    yourBest: "Best",
+    yourWorst: "Worst",
+    yourTake: "Your take (optional)",
+    submitAndVote: "Submit my ballot & run AI vote",
+    youTag: "(you)",
   },
 } as const;
 
