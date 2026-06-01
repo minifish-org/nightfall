@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
-import { fallbackDecision } from "@engine";
+import { fallbackDecision, viewFor } from "@engine";
 import { DEFAULT_CONFIG, type SpectatorConfig } from "./config.js";
 import { Controls, ConfigForm, SeatPanel, Timeline } from "./components.js";
 import { Settings } from "./SettingsPanel.js";
 import { SpectatorSeatPanel, SpectatorTimeline } from "./SpectatorView.js";
 import { SummaryPanel } from "./SummaryPanel.js";
-import { HumanPanel } from "./HumanPanel.js";
+import { HumanPanel, HumanInfo } from "./HumanPanel.js";
 import { UI } from "./i18n.js";
 import { publicSeats, publicTimeline, type ViewMode } from "./spectate.js";
 import { loadConnection, saveConnection, type ConnectionSettings } from "./settings.js";
@@ -46,6 +46,10 @@ export function App() {
   const playing = runner.status === "running" || runner.status === "paused";
   const lang = config.lang;
   const pending = runner.pendingHuman;
+  // The human seat's own private view, computed from full state — persistent so
+  // the player can always see their role / seer checks / wolf teammates in play
+  // mode (not only during their own turn or in god view).
+  const humanView = config.humanSeat !== null && runner.game ? viewFor(runner.game, config.humanSeat) : null;
 
   return (
     <main style={{ fontFamily: "system-ui, sans-serif", maxWidth: 1100, margin: "1.5rem auto", padding: "0 1rem" }}>
@@ -109,6 +113,17 @@ export function App() {
             showRoles={mode === "god" || revealed}
           />
         </>
+      )}
+
+      {/* persistent private-info panel for the local human seat (always visible
+          in play mode; the turn panel below covers it during their own turn) */}
+      {humanView && !pending && (
+        <div style={{ border: "1px solid #2563eb", borderRadius: 8, padding: "8px 12px", margin: "6px 0", background: "#f5f8ff" }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>
+            🪪 {t.myPanelTitle} — {t.seat} {config.humanSeat}
+          </div>
+          <HumanInfo view={humanView} lang={lang} />
+        </div>
       )}
 
       {/* local human seat input */}

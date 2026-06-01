@@ -1,7 +1,45 @@
 import { useState } from "react";
-import type { Action, Decision, Phase } from "@engine";
+import type { Action, Decision, Faction, Phase, SeatView } from "@engine";
 import type { AgentRequest } from "@orchestrator";
 import { ACTION_NAME, ROLE_NAME, UI, type Lang } from "./i18n.js";
+
+const factionTxt = (r: Faction, lang: Lang) => (r === "wolf" ? (lang === "zh" ? "狼" : "wolf") : lang === "zh" ? "好人" : "good");
+
+/**
+ * The human seat's OWN private info — role, seer checks (with results), wolf
+ * teammates, and (during the kill turn) teammates' proposed kills. Reused by
+ * the turn panel and the persistent panel. Shows only this seat's view.
+ */
+export function HumanInfo({ view, lang }: { view: SeatView; lang: Lang }) {
+  const t = UI[lang];
+  const p = view.private;
+  const checks = "checks" in p ? p.checks : null;
+  const teammates = "teammates" in p ? p.teammates : null;
+  const intents = "teammate_intents" in p ? (p.teammate_intents ?? []) : [];
+  return (
+    <div style={{ fontSize: 13 }}>
+      <div>
+        {t.youAre}: <b>{ROLE_NAME[lang][view.you.role]}</b>
+      </div>
+      {checks && (
+        <div>
+          🔮 {t.yourChecks}:{" "}
+          {checks.length === 0 ? t.noChecks : checks.map((c) => `${t.seat}${c.seat}→${factionTxt(c.result, lang)}`).join("  ")}
+        </div>
+      )}
+      {teammates && (
+        <div>
+          🐺 {t.teammatesLabel}: {teammates.length ? teammates.map((s) => `${t.seat}${s}`).join("  ") : "—"}
+        </div>
+      )}
+      {intents.length > 0 && (
+        <div>
+          🗡️ {t.intentsLabel}: {intents.map((i) => `${t.seat}${i.seat}→${i.target ?? "?"}`).join("  ")}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** The action a human must produce for a given phase. */
 function phaseAction(phase: Phase): Action {
@@ -43,9 +81,6 @@ export function HumanPanel({
   const [say, setSay] = useState("");
   const [reason, setReason] = useState("");
 
-  const checks = "checks" in view.private ? view.private.checks : null;
-  const teammates = "teammates" in view.private ? view.private.teammates : null;
-
   const submit = () => {
     const d: Decision = {
       action,
@@ -61,25 +96,13 @@ export function HumanPanel({
       <div style={{ fontWeight: 700, fontSize: 16 }}>
         🙋 {t.yourTurn} — {t.seat} {view.you.seat}
       </div>
-      <div style={{ fontSize: 13, color: "#334" }}>
-        {t.youAre}: <b>{ROLE_NAME[lang][view.you.role]}</b> · {t.phaseWord} {phase} · {t.dayWord}
+      <div style={{ fontSize: 13, color: "#334", margin: "2px 0 6px" }}>
+        {t.phaseWord} {phase} · {t.dayWord}
         {lang === "zh" ? `${req.day}${t.dayUnit}` : ` ${req.day}`}
       </div>
 
-      {/* own private info (seer checks / wolf teammates) */}
-      {checks && (
-        <div style={{ fontSize: 13, margin: "4px 0" }}>
-          🔮 {t.yourChecks}:{" "}
-          {checks.length === 0
-            ? t.noChecks
-            : checks.map((c) => `${t.seat}${c.seat}→${c.result === "wolf" ? (lang === "zh" ? "狼" : "wolf") : lang === "zh" ? "好人" : "good"}`).join("  ")}
-        </div>
-      )}
-      {teammates && (
-        <div style={{ fontSize: 13, margin: "4px 0" }}>
-          🐺 {lang === "zh" ? "你的狼队友" : "Your wolf teammates"}: {teammates.length ? teammates.map((s) => `${t.seat}${s}`).join("  ") : "—"}
-        </div>
-      )}
+      {/* own private info (role / seer checks / wolf teammates + intents) */}
+      <HumanInfo view={view} lang={lang} />
 
       {/* controls by phase */}
       {needsTarget && (
