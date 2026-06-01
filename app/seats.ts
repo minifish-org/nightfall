@@ -33,15 +33,41 @@ export const SEAT_AGENTS: SeatAgentDef[] = [
   { name: "werewolf-wolf", role: "wolf", model: SEAT_MODEL, systemPrompt: wolfPrompt },
 ];
 
-/** Build the POST /v1/agents/apply body for a seat under the given tenant. */
-export function seatManifest(def: SeatAgentDef, tenant: string): AgentManifest {
+export const SEAT_NAMES = SEAT_AGENTS.map((s) => s.name);
+
+/**
+ * Suggested model ids for the gateway (the combobox datalist). NOT exhaustive —
+ * the UI lets the user type any model id agentd accepts.
+ */
+export const MODEL_SUGGESTIONS = [
+  "free/chat",
+  "standard/chat",
+  "premium/chat",
+  "deepseek/chat",
+  "deepseek/premium",
+  "local/chat",
+  "openrouter/auto",
+  "openrouter/free",
+  "openrouter/premium",
+] as const;
+
+/** Default per-seat model map (every seat → SEAT_MODEL). */
+export function defaultSeatModels(): Record<string, string> {
+  return Object.fromEntries(SEAT_AGENTS.map((s) => [s.name, s.model]));
+}
+
+/**
+ * Build the POST /v1/agents/apply body for a seat under the given tenant.
+ * `model` overrides the seat's default model (per-seat model selection).
+ */
+export function seatManifest(def: SeatAgentDef, tenant: string, model: string = def.model): AgentManifest {
   return {
     apiVersion: "agentd/v2alpha1",
     kind: "Agent",
     metadata: { name: def.name, tenant },
     spec: {
       artifact_uri: SEAT_ARTIFACT_URI,
-      model: def.model,
+      model: model.trim() || def.model,
       system_prompt: def.systemPrompt,
       limits: { ...SEAT_LIMITS },
     },

@@ -1,10 +1,8 @@
 import { useCallback, useState } from "react";
 import { AgentdClient, type AgentSummary, type ConnectionTest } from "@agentd";
-import { SEAT_AGENTS, seatManifest } from "./seats.js";
-import { SETTINGS, type Lang } from "./i18n.js";
+import { MODEL_SUGGESTIONS, SEAT_AGENTS, SEAT_NAMES, seatManifest } from "./seats.js";
+import { ROLE_NAME, SETTINGS, type Lang } from "./i18n.js";
 import type { ConnectionSettings } from "./settings.js";
-
-const SEAT_NAMES = SEAT_AGENTS.map((s) => s.name);
 
 export function Settings({
   settings,
@@ -21,9 +19,12 @@ export function Settings({
   const [agents, setAgents] = useState<AgentSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string[]>([]);
+  const [dft, setDft] = useState<string>(settings.models[SEAT_NAMES[0]!] ?? "standard/chat");
 
   const newClient = () => new AgentdClient({ baseUrl: settings.baseUrl, tenant: settings.tenant, token: settings.token });
   const set = <K extends keyof ConnectionSettings>(k: K, v: ConnectionSettings[K]) => onChange({ ...settings, [k]: v });
+  const setModel = (name: string, m: string) => onChange({ ...settings, models: { ...settings.models, [name]: m } });
+  const applyAllModels = (m: string) => onChange({ ...settings, models: Object.fromEntries(SEAT_NAMES.map((n) => [n, m])) });
 
   const refresh = useCallback(async () => {
     try {
@@ -51,7 +52,7 @@ export function Settings({
     const lines: string[] = [];
     for (const def of SEAT_AGENTS) {
       try {
-        await c.applyAgent(seatManifest(def, settings.tenant));
+        await c.applyAgent(seatManifest(def, settings.tenant, settings.models[def.name]));
         lines.push(t.seatOk(def.name));
       } catch (e) {
         lines.push(t.seatErr(def.name, e instanceof Error ? e.message : String(e)));
@@ -60,8 +61,10 @@ export function Settings({
     }
     setBusy(false);
     void refresh();
+    // Depend on the whole `settings` (incl. models) so a model change is not
+    // captured stale — applying seats must use the latest per-seat models.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.baseUrl, settings.tenant, settings.token, t, refresh]);
+  }, [settings, t, refresh]);
 
   const del = useCallback(
     async (name: string) => {
@@ -114,6 +117,38 @@ export function Settings({
       <fieldset style={box}>
         <legend>{t.seatsLegend}</legend>
         <p style={{ fontSize: 13, color: "#555", marginTop: 0 }}>{t.seatsIntro}</p>
+
+        {/* per-seat model selection */}
+        <div style={{ margin: "0 0 10px" }}>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{t.modelsTitle}</div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", margin: "4px 0" }}>
+            <label style={{ fontSize: 13 }}>{t.defaultModel}</label>
+            <input list="model-suggestions" value={dft} onChange={(e) => setDft(e.target.value)} style={{ width: 200 }} />
+            <button onClick={() => applyAllModels(dft)}>{t.applyAll}</button>
+          </div>
+          {SEAT_AGENTS.map((def) => {
+            const live = agents?.find((a) => a.name === def.name)?.spec?.model;
+            const configured = settings.models[def.name] ?? def.model;
+            return (
+              <div key={def.name} style={{ display: "grid", gridTemplateColumns: "190px 1fr auto", gap: 8, alignItems: "center", margin: "2px 0" }}>
+                <label style={{ fontSize: 13 }}>
+                  {ROLE_NAME[lang][def.role]} <code style={{ color: "#888" }}>{def.name}</code>
+                </label>
+                <input name={`model-${def.name}`} list="model-suggestions" value={configured} onChange={(e) => setModel(def.name, e.target.value)} />
+                <span style={{ fontSize: 12, color: live === configured ? "#070" : "#a60" }}>
+                  {live ? t.runningModel(live) : ""}
+                </span>
+              </div>
+            );
+          })}
+          <datalist id="model-suggestions">
+            {MODEL_SUGGESTIONS.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+          <div style={{ fontSize: 12, color: "#888" }}>{t.modelHint}</div>
+        </div>
+
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button onClick={initSeats} disabled={busy}>
             {busy ? t.initializing : seatsReady ? t.reinitSeats : t.initSeats}
