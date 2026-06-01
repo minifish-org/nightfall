@@ -28,6 +28,7 @@ export function createGame(seed: number, gameId = `g${seed}`): GameState {
     seats,
     publicLog: [],
     seerChecks: {},
+    pendingLastWords: null,
     winner: null,
   };
 }

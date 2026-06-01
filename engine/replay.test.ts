@@ -22,6 +22,8 @@ function fixedCaller() {
         return { action: "kill", target: pick, say: "", reason: "" };
       case "day_discuss":
         return { action: "speak", target: null, say: `seat ${seat} on day ${state.day}`, reason: "" };
+      case "last_words":
+        return { action: "speak", target: null, say: `seat ${seat} last words`, reason: "" };
       case "day_vote":
         return { action: "vote", target: pick, say: "", reason: "" };
       default:

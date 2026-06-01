@@ -17,6 +17,8 @@ const fakeCaller: AgentCaller = async ({ phase, view, seat }) => {
       return { action: "kill", target: t, say: "", reason: "hunt" };
     case "day_discuss":
       return { action: "speak", target: null, say: `seat ${seat} speaks`, reason: "" };
+    case "last_words":
+      return { action: "speak", target: null, say: `seat ${seat} last words`, reason: "" };
     case "day_vote":
       return { action: "vote", target: t, say: "", reason: "suspicion" };
     default:
@@ -119,7 +121,7 @@ describe("runGame — orchestrator with injected fake caller", () => {
       state: createGame(7),
       agentCaller: caller,
       observer: { onSeatDecision: (e) => e.error && errors.push(e.error) },
-      options: { maxSteps: 4 },
+      options: { maxSteps: 12 }, // last_words can push day_vote a step later
     });
     // Game still resolves (everyone effectively abstains in votes) and the
     // illegal action was surfaced, not hidden.

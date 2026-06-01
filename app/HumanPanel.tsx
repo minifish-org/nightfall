@@ -49,6 +49,7 @@ function phaseAction(phase: Phase): Action {
     case "night_wolf":
       return "kill";
     case "day_discuss":
+    case "last_words":
       return "speak";
     default:
       return "vote"; // day_vote (abstain is a separate button)

@@ -35,20 +35,35 @@ export interface AgentdCallerConfig {
  * if all attempts fail it throws, so the orchestrator degrades and marks the
  * step errored.
  */
+/** Per-turn persona override so the dead seat produces proper last words —
+ *  the registered personas don't know the `last_words` phase. */
+function lastWordsPrompt(lang?: string): string {
+  if (lang === "en") {
+    return 'You have been eliminated. These are your LAST WORDS — one final public statement everyone hears (you may claim seer, reveal checks, rally your side, or flip). Output ONE JSON object only: {"action":"speak","target":null,"say":"<your last words>","reason":"<private>"}.';
+  }
+  return '你在本局已经出局。这是你的【遗言】——最后一次公开发言,全场都会听到(可以跳预言家/报验人、留警徽流、为阵营喊话或反水)。只输出一个 JSON 对象,无多余文字:{"action":"speak","target":null,"say":"你的遗言","reason":"私有思考"}。';
+}
+
 export function createAgentdCaller(cfg: AgentdCallerConfig): AgentCaller {
   const attempts = Math.max(1, (cfg.retries ?? 2) + 1);
-  return async ({ seat, role, view }) => {
+  return async ({ seat, role, view, phase }) => {
     const agentRef = roleAgentRef(role, cfg.pool);
     const scope = seatScope(cfg.gameId, seat);
+    const lang = cfg.lang ?? "zh";
+    // `lang` rides inside `input` because agentd's generic agent forwards only
+    // payload.input to the model. For last words, a system_prompt override
+    // turns the role persona into a "say your final words" prompt.
+    const payload =
+      phase === "last_words"
+        ? { input: { ...view, lang }, system_prompt: lastWordsPrompt(cfg.lang) }
+        : { input: { ...view, lang } };
     let lastError: Error = new Error(`seat ${seat} produced no decision`);
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
         const res = await cfg.client.submitTurn({
           agentRef,
           scope,
-          // `lang` rides inside `input` because agentd's generic agent forwards
-          // only payload.input to the model (sibling fields are dropped).
-          payload: { input: { ...view, lang: cfg.lang ?? "zh" } },
+          payload,
           wait: true,
           ...(cfg.timeoutMs !== undefined ? { timeoutMs: cfg.timeoutMs } : {}),
         });

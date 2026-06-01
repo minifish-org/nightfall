@@ -18,6 +18,7 @@ export const PHASE_LABEL: Record<Lang, Record<Phase, string>> = {
     night_wolf: "🐺 夜 · 狼人",
     day_discuss: "💬 昼 · 讨论",
     day_vote: "🗳️ 昼 · 投票",
+    last_words: "🪦 遗言",
     game_over: "🏁 对局结束",
   },
   en: {
@@ -25,6 +26,7 @@ export const PHASE_LABEL: Record<Lang, Record<Phase, string>> = {
     night_wolf: "🐺 Night · Wolves",
     day_discuss: "💬 Day · Discussion",
     day_vote: "🗳️ Day · Vote",
+    last_words: "🪦 Last words",
     game_over: "🏁 Game over",
   },
 };

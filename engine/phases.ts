@@ -26,6 +26,9 @@ export function currentActors(state: GameState): number[] {
     case "day_discuss":
     case "day_vote":
       return aliveSeats(state).map((s) => s.seat);
+    case "last_words":
+      // The just-died seat speaks (it is no longer alive, so not seat-filtered).
+      return state.pendingLastWords ? [state.pendingLastWords.seat] : [];
     case "game_over":
       return [];
   }
@@ -50,6 +53,7 @@ export function validTargets(state: GameState, seat: number): number[] {
     case "day_vote":
       return livingOthers;
     case "day_discuss":
+    case "last_words":
     case "game_over":
       return [];
   }
@@ -72,6 +76,8 @@ export function legalActions(phase: Phase): Action[] {
       return ["speak"];
     case "day_vote":
       return ["vote", "abstain"];
+    case "last_words":
+      return ["speak"];
     case "game_over":
       return [];
   }
@@ -88,6 +94,8 @@ export function fallbackDecision(phase: Phase): Decision {
       return { action: "speak", target: null, say: "(silent)", reason: "fallback: silent" };
     case "day_vote":
       return { action: "abstain", target: null, say: "", reason: "fallback: abstain" };
+    case "last_words":
+      return { action: "speak", target: null, say: "", reason: "fallback: no last words" };
     case "game_over":
       return { action: "abstain", target: null, say: "", reason: "fallback" };
   }
@@ -148,7 +156,8 @@ export function reduce(
         killSeat(seats, publicLog, events, victim, "night_wolf", "night", state.day);
       }
       next.rngState = rng.state();
-      return finishOrAdvance(next, "day_discuss", state.day, events);
+      // Last words only for a FIRST-night kill (首夜被刀); later night kills get none.
+      return resolveDeath(next, victim, state.day === 1, "day_discuss", state.day, events);
     }
 
     case "day_discuss": {
@@ -182,8 +191,20 @@ export function reduce(
         killSeat(seats, publicLog, events, victim, "day_vote", "vote", state.day);
       }
       next.rngState = rng.state();
-      // Next round; bump the day counter.
-      return finishOrAdvance(next, "night_seer", state.day + 1, events);
+      // A banished player always gets last words; then on to the next night.
+      return resolveDeath(next, victim, true, "night_seer", state.day + 1, events);
+    }
+
+    case "last_words": {
+      const plw = state.pendingLastWords;
+      if (!plw) return advance(next, "night_seer", state.day, events); // defensive
+      const say = (decisions.get(plw.seat)?.say ?? "").trim();
+      publicLog.push({ type: "lastwords", day: state.day, seat: plw.seat, say });
+      events.push({ type: "phase_advance", from: "last_words", to: plw.resumePhase, day: plw.resumeDay });
+      return {
+        state: { ...next, phase: plw.resumePhase, day: plw.resumeDay, pendingLastWords: null },
+        events,
+      };
     }
 
     default:
@@ -219,11 +240,18 @@ function advance(
   return { state: { ...state, phase: to, day }, events };
 }
 
-/** Resolve victory; either end the game or advance. Used after lethal phases. */
-function finishOrAdvance(
+/**
+ * After a lethal phase: check victory first (game over → no last words). If the
+ * game continues and the death is last-words-eligible, enter the `last_words`
+ * step (the victim speaks, then resume at resumePhase/resumeDay); otherwise
+ * advance straight to resumePhase.
+ */
+function resolveDeath(
   state: GameState,
-  to: Phase,
-  day: number,
+  victim: number | undefined,
+  eligible: boolean,
+  resumePhase: Phase,
+  resumeDay: number,
   events: ResolutionEvent[],
 ): { state: GameState; events: ResolutionEvent[] } {
   const winner = checkVictory(state);
@@ -231,7 +259,14 @@ function finishOrAdvance(
     events.push({ type: "game_over", winner });
     return { state: { ...state, phase: "game_over", winner }, events };
   }
-  return advance(state, to, day, events);
+  if (victim !== undefined && eligible) {
+    events.push({ type: "phase_advance", from: state.phase, to: "last_words", day: state.day });
+    return {
+      state: { ...state, phase: "last_words", pendingLastWords: { seat: victim, resumePhase, resumeDay } },
+      events,
+    };
+  }
+  return advance(state, resumePhase, resumeDay, events);
 }
 
 /** Highest-count entry; ties broken deterministically by RNG. */

@@ -38,17 +38,18 @@ describe("currentActors", () => {
 });
 
 describe("night_wolf — kill aggregation", () => {
-  it("plurality target dies; advances to day_discuss", () => {
+  it("plurality target dies; first-night kill goes to last_words", () => {
     let s = createGame(7);
     const seer = roleSeats(s, "seer")[0]!;
-    s = reduce(s, new Map([[seer, dec("check", null)]])).state; // night_wolf now
+    s = reduce(s, new Map([[seer, dec("check", null)]])).state; // night_wolf now (day 1)
     const wolves = roleSeats(s, "wolf");
     const victim = s.seats.find((x) => x.role === "villager")!.seat;
 
     const { state: after, events } = reduce(s, new Map(wolves.map((w) => [w, dec("kill", victim)])));
     expect(after.seats.find((x) => x.seat === victim)!.alive).toBe(false);
     expect(ev(events, "night_kill")!.victim).toBe(victim);
-    expect(after.phase).toBe("day_discuss");
+    expect(after.phase).toBe("last_words"); // 首夜被刀 → 遗言
+    expect(after.pendingLastWords?.seat).toBe(victim);
     // No role reveal.
     const death = after.publicLog.find((e) => e.type === "death");
     expect(death && "role_revealed" in death && death.role_revealed).toBeNull();
@@ -165,6 +166,57 @@ describe("victory (屠民 / kill the villager side)", () => {
     expect(after.seats.find((x) => x.seat === lastVillager)!.alive).toBe(false);
     expect(after.phase).toBe("game_over");
     expect(after.winner).toBe("wolf");
+    expect(after.pendingLastWords).toBeNull(); // game over → no last words
     expect(events.some((e) => e.type === "game_over")).toBe(true);
+  });
+});
+
+describe("last words (首夜被刀 + 所有放逐)", () => {
+  it("a first-night kill triggers last_words for the victim, then resumes to day_discuss", () => {
+    let s = createGame(7);
+    s = reduce(s, new Map()).state; // night_seer (no check) → night_wolf, day 1
+    expect(s.phase).toBe("night_wolf");
+    const wolves = roleSeats(s, "wolf");
+    const victim = s.seats.find((x) => x.role === "villager")!.seat;
+    let r = reduce(s, new Map(wolves.map((w) => [w, dec("kill", victim)])));
+    expect(r.state.phase).toBe("last_words");
+    expect(r.state.pendingLastWords?.seat).toBe(victim);
+    expect(currentActors(r.state)).toEqual([victim]); // the dead seat speaks
+    r = reduce(r.state, new Map([[victim, dec("speak", null, "我是好人,小心狼")]]));
+    expect(r.state.phase).toBe("day_discuss");
+    expect(r.state.pendingLastWords).toBeNull();
+    expect(r.state.publicLog.some((e) => e.type === "lastwords" && e.seat === victim && e.say === "我是好人,小心狼")).toBe(true);
+  });
+
+  it("a second-night kill gives NO last words (straight to day_discuss)", () => {
+    let s = createGame(7);
+    s = reduce(s, new Map()).state; // night_wolf d1
+    s = reduce(s, new Map()).state; // no kill → day_discuss d1
+    s = reduce(s, new Map(currentActors(s).map((x) => [x, dec("speak", null, "hi")]))).state; // → day_vote d1
+    s = reduce(s, new Map(currentActors(s).map((x) => [x, dec("abstain")]))).state; // all abstain → night_seer d2
+    expect(s.day).toBe(2);
+    s = reduce(s, new Map()).state; // → night_wolf d2
+    expect(s.phase).toBe("night_wolf");
+    const wolves = roleSeats(s, "wolf");
+    const v = s.seats.find((x) => x.alive && x.role === "villager")!.seat;
+    const r = reduce(s, new Map(wolves.map((w) => [w, dec("kill", v)])));
+    expect(r.state.phase).toBe("day_discuss"); // no last_words on night 2
+    expect(r.state.pendingLastWords).toBeNull();
+    expect(r.state.publicLog.some((e) => e.type === "lastwords")).toBe(false);
+  });
+
+  it("a banished player always gets last words, then on to the next night", () => {
+    let s = createGame(7);
+    s = reduce(s, new Map()).state; // night_wolf
+    s = reduce(s, new Map()).state; // day_discuss (no kill)
+    s = reduce(s, new Map(currentActors(s).map((x) => [x, dec("speak", null, "hi")]))).state; // → day_vote
+    const target = s.seats.find((x) => x.alive)!.seat;
+    let r = reduce(s, new Map(currentActors(s).map((x) => [x, dec("vote", target)])));
+    expect(r.state.phase).toBe("last_words");
+    expect(r.state.pendingLastWords?.seat).toBe(target);
+    r = reduce(r.state, new Map([[target, dec("speak", null, "我冤枉")]]));
+    expect(r.state.phase).toBe("night_seer");
+    expect(r.state.day).toBe(2);
+    expect(r.state.publicLog.some((e) => e.type === "lastwords" && e.seat === target)).toBe(true);
   });
 });

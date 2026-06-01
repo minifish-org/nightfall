@@ -14,8 +14,12 @@ export const FACTION_OF: Record<Role, Faction> = {
   villager: "good",
 };
 
-/** The phase FSM. A round is night_seer → night_wolf → day_discuss → day_vote. */
-export type Phase = "night_seer" | "night_wolf" | "day_discuss" | "day_vote" | "game_over";
+/**
+ * The phase FSM. A round is night_seer → night_wolf → day_discuss → day_vote.
+ * `last_words` is a transient one-seat step the just-died player speaks in, when
+ * eligible (首夜被刀 or any banish), before the FSM resumes.
+ */
+export type Phase = "night_seer" | "night_wolf" | "day_discuss" | "day_vote" | "last_words" | "game_over";
 
 /** Phases in which a death can be resolved. */
 export type DeathPhase = "night_wolf" | "day_vote";
@@ -53,7 +57,8 @@ export type PublicEntry =
       seat: number;
       cause: "night" | "vote";
       role_revealed: null;
-    };
+    }
+  | { type: "lastwords"; day: number; seat: number; say: string };
 
 export interface SeatState {
   /** 1-based seat number, stable for the whole game. */
@@ -76,6 +81,11 @@ export interface GameState {
   publicLog: PublicEntry[];
   /** seer seat number -> its private check history. Authority-only. */
   seerChecks: Record<number, SeerCheck[]>;
+  /**
+   * Set while phase === "last_words": who speaks their last words, and where the
+   * FSM resumes after. Null otherwise.
+   */
+  pendingLastWords: { seat: number; resumePhase: Phase; resumeDay: number } | null;
   winner: Faction | null;
 }
 

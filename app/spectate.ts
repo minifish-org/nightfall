@@ -51,7 +51,8 @@ export function publicTimeline(items: TimelineItem[], lang: Lang): PublicTimelin
         out.push({ id: it.id, kind: "phase", day: it.day, phase: it.phase });
         break;
       case "decision": {
-        if (it.phase === "day_discuss") {
+        if (it.phase === "day_discuss" || it.phase === "last_words") {
+          // Day speeches and last words are public.
           const say = (it.say ?? "").trim();
           if (say) out.push({ id: it.id, kind: "speech", day: it.day, seat: it.seat, say });
         } else if (it.phase === "day_vote") {

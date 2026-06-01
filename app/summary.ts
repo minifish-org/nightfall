@@ -17,7 +17,9 @@ export function buildRecap(timeline: TimelineItem[], lang: Lang): string[] {
   const lines: string[] = [];
   for (const it of timeline) {
     if (it.kind === "decision") {
-      if (it.phase === "day_discuss" && it.say.trim()) {
+      if (it.phase === "last_words" && it.say.trim()) {
+        lines.push(`D${it.day} ${lang === "zh" ? "座位" : "seat "}${it.seat}(${roleTxt(it.role)}) ${lang === "zh" ? "遗言" : "last words"}: ${it.say.trim()}`);
+      } else if (it.phase === "day_discuss" && it.say.trim()) {
         lines.push(`D${it.day} ${lang === "zh" ? "座位" : "seat "}${it.seat}(${roleTxt(it.role)}) ${lang === "zh" ? "发言" : "says"}: ${it.say.trim()}`);
       } else if (it.phase === "day_vote") {
         lines.push(`D${it.day} ${lang === "zh" ? "座位" : "seat "}${it.seat} ${lang === "zh" ? "投票→" : "votes→"}${it.target ?? (lang === "zh" ? "弃票" : "abstain")}`);
