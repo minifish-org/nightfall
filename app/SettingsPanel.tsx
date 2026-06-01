@@ -123,7 +123,9 @@ export function Settings({
           <div style={{ fontWeight: 600, fontSize: 13 }}>{t.modelsTitle}</div>
           <div style={{ display: "flex", gap: 6, alignItems: "center", margin: "4px 0" }}>
             <label style={{ fontSize: 13 }}>{t.defaultModel}</label>
-            <input list="model-suggestions" value={dft} onChange={(e) => setDft(e.target.value)} style={{ width: 200 }} />
+            <div style={{ width: 240 }}>
+              <ModelSelect value={dft} onChange={setDft} lang={lang} />
+            </div>
             <button onClick={() => applyAllModels(dft)}>{t.applyAll}</button>
           </div>
           {SEAT_AGENTS.map((def) => {
@@ -134,18 +136,13 @@ export function Settings({
                 <label style={{ fontSize: 13 }}>
                   {ROLE_NAME[lang][def.role]} <code style={{ color: "#888" }}>{def.name}</code>
                 </label>
-                <input name={`model-${def.name}`} list="model-suggestions" value={configured} onChange={(e) => setModel(def.name, e.target.value)} />
+                <ModelSelect name={`model-${def.name}`} value={configured} onChange={(v) => setModel(def.name, v)} lang={lang} />
                 <span style={{ fontSize: 12, color: live === configured ? "#070" : "#a60" }}>
                   {live ? t.runningModel(live) : ""}
                 </span>
               </div>
             );
           })}
-          <datalist id="model-suggestions">
-            {MODEL_SUGGESTIONS.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
           <div style={{ fontSize: 12, color: "#888" }}>{t.modelHint}</div>
         </div>
 
@@ -185,5 +182,59 @@ export function Settings({
         </div>
       </fieldset>
     </div>
+  );
+}
+
+const CUSTOM = "__custom__";
+
+/**
+ * Model picker: a native <select> of suggestions plus a "Custom…" option that
+ * reveals a free-text input for any model id. Cleaner than a datalist combobox
+ * (whose suggestion popup the browser renders inconsistently/ugly).
+ */
+function ModelSelect({
+  value,
+  onChange,
+  lang,
+  name,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  lang: Lang;
+  name?: string;
+}) {
+  const known = (MODEL_SUGGESTIONS as readonly string[]).includes(value);
+  const selectStyle: React.CSSProperties = {
+    padding: "4px 6px",
+    borderRadius: 6,
+    border: "1px solid #aaa",
+    flex: known ? 1 : "0 0 auto",
+    minWidth: 0,
+  };
+  return (
+    <span style={{ display: "flex", gap: 6, alignItems: "center", width: "100%" }}>
+      <select
+        name={name}
+        value={known ? value : CUSTOM}
+        onChange={(e) => onChange(e.target.value === CUSTOM ? (known ? "" : value) : e.target.value)}
+        style={selectStyle}
+      >
+        {MODEL_SUGGESTIONS.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+        <option value={CUSTOM}>{lang === "zh" ? "自定义…" : "Custom…"}</option>
+      </select>
+      {!known && (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="model id"
+          autoFocus
+          style={{ flex: 1, minWidth: 0 }}
+        />
+      )}
+    </span>
   );
 }
