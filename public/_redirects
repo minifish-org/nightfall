@@ -1,0 +1,4 @@
+# Cloudflare Pages SPA fallback: serve index.html for any unmatched path.
+# Existing static files (/, /assets/*) are served directly; this only catches
+# deep links. Copied to dist/ by Vite (publicDir).
+/*    /index.html   200

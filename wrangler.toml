@@ -1,0 +1,7 @@
+# Cloudflare Pages project config (static SPA). The referee runs in the browser
+# and agentd is an external HTTPS service — there is NO Worker/server to deploy
+# here. `pages_build_output_dir` lets `wrangler pages deploy` (and the dashboard
+# Git integration) find the Vite build output.
+name = "nightfall"
+compatibility_date = "2024-12-01"
+pages_build_output_dir = "dist"
