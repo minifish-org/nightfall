@@ -62,6 +62,26 @@ export const UI = {
     dayUnit: "天",
     phaseWord: "阶段",
     unreachableHint: (url: string) => `agentd 是否在 ${url} 运行、且已注册三个 agent?`,
+    viewModeLabel: "视角",
+    godMode: "上帝视角",
+    spectatorMode: "观赛模式",
+    spectatorNote: "观赛模式:隐藏身份与私有思考,只看公开信息",
+    reveal: "🎭 揭晓真实身份",
+    hideReveal: "收起",
+    revealTitle: "身份揭晓",
+    humanSeatLabel: "本地玩家座位",
+    humanNone: "无(全 AI)",
+    yourTurn: "轮到你了",
+    youAre: "你的身份",
+    yourChecks: "你的验人结果",
+    noChecks: "(暂无验人结果)",
+    submit: "提交决策",
+    skipDefault: "跳过(默认)",
+    speakPlaceholder: "输入你的公开发言…",
+    reasonPlaceholder: "私有思考(可空,别人看不到)",
+    pickTarget: "选择目标座位",
+    abstainBtn: "弃票",
+    waitingHuman: "等待你输入…",
   },
   en: {
     title: "🐺 Nightfall — AI Werewolf spectator",
@@ -94,6 +114,26 @@ export const UI = {
     dayUnit: "",
     phaseWord: "phase",
     unreachableHint: (url: string) => `Is agentd reachable at ${url} with the three agents registered?`,
+    viewModeLabel: "View",
+    godMode: "God view",
+    spectatorMode: "Spectator",
+    spectatorNote: "Spectator: identities & private notes hidden — public info only",
+    reveal: "🎭 Reveal roles",
+    hideReveal: "Hide",
+    revealTitle: "Roles revealed",
+    humanSeatLabel: "Local player seat",
+    humanNone: "None (all AI)",
+    yourTurn: "Your turn",
+    youAre: "You are",
+    yourChecks: "Your checks",
+    noChecks: "(no checks yet)",
+    submit: "Submit",
+    skipDefault: "Skip (default)",
+    speakPlaceholder: "Your public statement…",
+    reasonPlaceholder: "Private note (optional, hidden from others)",
+    pickTarget: "Pick a target seat",
+    abstainBtn: "Abstain",
+    waitingHuman: "Waiting for your input…",
   },
 } as const;
 
@@ -153,6 +193,42 @@ export function resolutionText(
 export function winnerText(winner: Faction, lang: Lang): string {
   if (lang === "zh") return `🏁 ${winner === "wolf" ? "狼人" : "好人"}阵营获胜`;
   return `🏁 ${winner.toUpperCase()} wins`;
+}
+
+/**
+ * PUBLIC resolution text for spectator mode — uses seat numbers only, NEVER a
+ * role. Seer checks are dropped entirely (private), and night-kill proposals
+ * (which would expose the wolves) are never included.
+ */
+export function publicResolutionText(
+  e: ResolutionEvent,
+  lang: Lang,
+): { text: string; tone: "kill" | "info" | "safe" } | null {
+  const zh = lang === "zh";
+  switch (e.type) {
+    case "seer_check":
+      return null; // private — spectators never see who checked whom
+    case "night_kill":
+      return e.victim === null
+        ? { tone: "safe", text: zh ? "🌙 昨夜无人死亡" : "🌙 No one died last night" }
+        : { tone: "kill", text: zh ? `🔪 昨夜 座位 ${e.victim} 出局` : `🔪 Seat ${e.victim} was killed last night` };
+    case "banish": {
+      const tally = Object.entries(e.tally).map(([s, n]) => `${s}:${n}`).join("  ") || "—";
+      return e.victim === null
+        ? {
+            tone: "safe",
+            text: zh ? `⚖️ 无人被放逐 · 票数 ${tally} · 弃票 ${e.abstains}` : `⚖️ No banishment · votes ${tally} · abstain ${e.abstains}`,
+          }
+        : {
+            tone: "kill",
+            text: zh ? `⚖️ 放逐 座位 ${e.victim} · 票数 ${tally} · 弃票 ${e.abstains}` : `⚖️ Banished seat ${e.victim} · votes ${tally} · abstain ${e.abstains}`,
+          };
+    }
+    case "death":
+    case "phase_advance":
+    case "game_over":
+      return null;
+  }
 }
 
 /** Settings panel strings. */

@@ -15,6 +15,8 @@ export interface SpectatorConfig {
   lang: Lang;
   /** agent_ref pool: which registered agent plays each role. */
   pool: Record<Role, string>;
+  /** Seat number (1-6) played by a local human, or null = all AI. */
+  humanSeat: number | null;
 }
 
 export const DEFAULT_CONFIG: SpectatorConfig = {
@@ -22,4 +24,5 @@ export const DEFAULT_CONFIG: SpectatorConfig = {
   stepDelayMs: 800,
   lang: "zh",
   pool: { ...ROLE_AGENT_REF },
+  humanSeat: null,
 };

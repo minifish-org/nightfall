@@ -1,4 +1,4 @@
-import type { Action, Faction, Phase, Role } from "@engine";
+import type { Action, Faction, Phase, ResolutionEvent, Role } from "@engine";
 
 /**
  * Renderable timeline items. Pure VIEW data derived from orchestrator events +
@@ -20,5 +20,15 @@ export type TimelineItem =
       reason: string;
       error?: string;
     }
-  | { id: number; kind: "resolution"; day: number; phase: Phase; text: string; tone: "kill" | "info" | "safe" }
+  | {
+      id: number;
+      kind: "resolution";
+      day: number;
+      phase: Phase;
+      text: string;
+      tone: "kill" | "info" | "safe";
+      // Raw event kept so the spectator projection can re-format with public-only
+      // text (no roles / no kill proposals); the god view uses `text`.
+      event: ResolutionEvent;
+    }
   | { id: number; kind: "gameover"; winner: Faction };

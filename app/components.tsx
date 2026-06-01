@@ -38,6 +38,19 @@ export function ConfigForm({
         <input type="number" value={config.seed} onChange={(e) => set("seed", Number(e.target.value))} />
         <label>{t.stepDelay}</label>
         <input type="number" value={config.stepDelayMs} onChange={(e) => set("stepDelayMs", Number(e.target.value))} />
+        <label>{t.humanSeatLabel}</label>
+        <select
+          name="humanSeat"
+          value={config.humanSeat ?? ""}
+          onChange={(e) => set("humanSeat", e.target.value === "" ? null : Number(e.target.value))}
+        >
+          <option value="">{t.humanNone}</option>
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <option key={n} value={n}>
+              {t.seat} {n}
+            </option>
+          ))}
+        </select>
         {(["wolf", "seer", "villager"] as Role[]).map((r) => (
           <FragmentRow key={r} label={`${ROLE_EMOJI[r]} ${ROLE_NAME[config.lang][r]} ${t.agentRefSuffix}`}>
             <input value={config.pool[r]} onChange={(e) => setPool(r, e.target.value)} />
