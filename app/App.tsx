@@ -3,7 +3,8 @@ import { fallbackDecision } from "@engine";
 import { DEFAULT_CONFIG, type SpectatorConfig } from "./config.js";
 import { Controls, ConfigForm, SeatPanel, Timeline } from "./components.js";
 import { Settings } from "./SettingsPanel.js";
-import { SpectatorSeatPanel, SpectatorTimeline, RevealPanel } from "./SpectatorView.js";
+import { SpectatorSeatPanel, SpectatorTimeline } from "./SpectatorView.js";
+import { SummaryPanel } from "./SummaryPanel.js";
 import { HumanPanel } from "./HumanPanel.js";
 import { UI } from "./i18n.js";
 import { publicSeats, publicTimeline, type ViewMode } from "./spectate.js";
@@ -92,6 +93,24 @@ export function App() {
         </p>
       )}
 
+      {/* post-game summary + AI peer vote (roles shown in god mode, or after reveal) */}
+      {runner.winner && runner.game && (
+        <>
+          {mode === "spectator" && (
+            <button onClick={() => setRevealed((v) => !v)} style={{ margin: "4px 0" }}>
+              {revealed ? t.hideReveal : t.reveal}
+            </button>
+          )}
+          <SummaryPanel
+            lang={lang}
+            game={runner.game}
+            timeline={runner.timeline}
+            connection={connection}
+            showRoles={mode === "god" || revealed}
+          />
+        </>
+      )}
+
       {/* local human seat input */}
       {pending && (
         <HumanPanel
@@ -118,14 +137,6 @@ export function App() {
               day={runner.game.day}
               winner={runner.winner}
             />
-          )}
-
-          {/* reveal: god view already shows roles; in spectator, allow reveal at terminal */}
-          {mode === "spectator" && runner.winner && runner.game && (
-            <div style={{ marginTop: 8 }}>
-              <button onClick={() => setRevealed((v) => !v)}>{revealed ? t.hideReveal : t.reveal}</button>
-              {revealed && <RevealPanel lang={lang} game={runner.game} />}
-            </div>
           )}
         </section>
         <section>
