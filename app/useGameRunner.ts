@@ -8,6 +8,7 @@ import type { SpectatorConfig } from "./config.js";
 import type { ConnectionSettings } from "./settings.js";
 import { Pacer } from "./pacer.js";
 import { resolutionText } from "./i18n.js";
+import { cancelSpeech, speak, speechIdle } from "./tts.js";
 import type { TimelineItem } from "./timeline.js";
 
 export type RunStatus = "idle" | "running" | "paused" | "done" | "error";
@@ -43,6 +44,12 @@ export function useGameRunner() {
   const nextId = () => ++idRef.current;
   // Resolver for the human seat's awaited decision (set while pendingHuman).
   const humanResolveRef = useRef<((d: Decision) => void) | null>(null);
+  // TTS on/off, read live by the running game's observer + gate.
+  const ttsRef = useRef(false);
+  const setTts = useCallback((on: boolean) => {
+    ttsRef.current = on;
+    if (!on) cancelSpeech();
+  }, []);
 
   const submitHuman = useCallback((decision: Decision) => {
     const resolve = humanResolveRef.current;
@@ -90,12 +97,21 @@ export function useGameRunner() {
         return aiCaller(req);
       };
       const lang = config.lang;
+      const zh = lang === "zh";
+      // Narrate ONLY public content (speeches, last words, deaths, banishes,
+      // winner, day/night transitions) — never night actions or checks.
+      const narrate = (text: string, seat?: number) => {
+        if (ttsRef.current) speak(text, lang, seat);
+      };
 
       const observer: Observer = {
         onGameStart: (g) => setState((s) => ({ ...s, game: g })),
         onPhaseStart: (e, g) => {
           setState((s) => ({ ...s, game: g }));
           push({ id: nextId(), kind: "phase", day: e.day, phase: e.phase, actors: e.actors });
+          if (e.phase === "night_seer") narrate(zh ? "天黑了" : "Night falls");
+          else if (e.phase === "day_discuss") narrate(zh ? "天亮了" : "Day breaks");
+          else if (e.phase === "day_vote") narrate(zh ? "开始投票" : "Voting begins");
         },
         onSeatDecision: (e, g) => {
           setState((s) => ({ ...s, game: g }));
@@ -112,17 +128,26 @@ export function useGameRunner() {
             reason: e.decision.reason,
             ...(e.error !== undefined ? { error: e.error } : {}),
           });
+          const say = e.decision.say.trim();
+          if (say && (e.phase === "day_discuss" || e.phase === "last_words")) {
+            const prefix = e.phase === "last_words" ? (zh ? `${e.seat}号遗言：` : `Seat ${e.seat}, last words: `) : zh ? `${e.seat}号：` : `Seat ${e.seat}: `;
+            narrate(prefix + say, e.seat);
+          }
         },
         onResolution: (e, g) => {
           setState((s) => ({ ...s, game: g }));
           for (const ev of e.events) {
             const r = resolutionText(g, ev, lang);
             if (r) push({ id: nextId(), kind: "resolution", day: e.day, phase: e.phase, text: r.text, tone: r.tone, event: ev });
+            if (ev.type === "night_kill" && ev.victim !== null) narrate(zh ? `昨夜，${ev.victim}号出局` : `Last night, seat ${ev.victim} died`);
+            else if (ev.type === "banish" && ev.victim !== null) narrate(zh ? `${ev.victim}号被放逐` : `Seat ${ev.victim} was banished`);
+            // seer_check is private — never narrated.
           }
         },
         onGameOver: (winner, g) => {
           setState((s) => ({ ...s, game: g, winner }));
           push({ id: nextId(), kind: "gameover", winner });
+          narrate(zh ? `${winner === "wolf" ? "狼人" : "好人"}阵营获胜` : `${winner} team wins`);
         },
       };
 
@@ -130,7 +155,15 @@ export function useGameRunner() {
         state: game,
         agentCaller,
         observer,
-        options: { gate: () => pacer.gate(), signal: abort.signal },
+        // Pace each step to the voice when TTS is on: wait for the previous
+        // utterance to finish before advancing, so it reads like a narrated match.
+        options: {
+          gate: async () => {
+            await pacer.gate();
+            if (ttsRef.current) await speechIdle();
+          },
+          signal: abort.signal,
+        },
       })
         .then((res) => {
           setState((s) => ({ ...s, status: res.aborted ? "idle" : "done", winner: res.winner, game: res.state, pendingHuman: null }));
@@ -158,6 +191,7 @@ export function useGameRunner() {
   const stop = useCallback(() => {
     abortRef.current?.abort();
     pacerRef.current?.abort();
+    cancelSpeech();
     // Unblock a pending human turn so the awaited promise resolves and the loop
     // can exit at the next boundary.
     const resolve = humanResolveRef.current;
@@ -170,5 +204,5 @@ export function useGameRunner() {
   }, [state.game?.phase]);
   const setDelay = useCallback((ms: number) => pacerRef.current?.setDelay(ms), []);
 
-  return { ...state, start, pause, resume, step, stop, setDelay, submitHuman };
+  return { ...state, start, pause, resume, step, stop, setDelay, submitHuman, setTts };
 }

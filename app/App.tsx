@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fallbackDecision, viewFor } from "@engine";
 import { DEFAULT_CONFIG, type SpectatorConfig } from "./config.js";
 import { Controls, ConfigForm, SeatPanel, Timeline } from "./components.js";
@@ -7,6 +7,7 @@ import { SpectatorSeatPanel, SpectatorTimeline } from "./SpectatorView.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { HumanPanel, HumanInfo } from "./HumanPanel.js";
 import { UI } from "./i18n.js";
+import { ttsSupported } from "./tts.js";
 import { publicSeats, publicTimeline, type ViewMode } from "./spectate.js";
 import { loadConnection, saveConnection, type ConnectionSettings } from "./settings.js";
 import { useGameRunner } from "./useGameRunner.js";
@@ -18,8 +19,15 @@ export function App() {
   const [connection, setConnectionState] = useState<ConnectionSettings>(loadConnection);
   const [mode, setMode] = useState<ViewMode>("god");
   const [revealed, setRevealed] = useState(false);
+  const [ttsOn, setTtsOn] = useState(false);
   const runner = useGameRunner();
   const t = UI[config.lang];
+
+  // Keep the runner's live TTS flag in sync with the toggle.
+  const { setTts } = runner;
+  useEffect(() => {
+    setTts(ttsOn);
+  }, [ttsOn, setTts]);
 
   const setConnection = (c: ConnectionSettings) => {
     setConnectionState(c);
@@ -87,6 +95,21 @@ export function App() {
           </button>
         ))}
         {mode === "spectator" && <span style={{ fontSize: 12, color: "#888" }}>{t.spectatorNote}</span>}
+        {ttsSupported() && (
+          <button
+            onClick={() => setTtsOn((v) => !v)}
+            title="实验性:用浏览器内置语音朗读公开发言/事件"
+            style={{
+              marginLeft: "auto",
+              padding: "3px 10px",
+              border: ttsOn ? "2px solid #2563eb" : "1px solid #aaa",
+              borderRadius: 6,
+              background: ttsOn ? "#dbeafe" : "#fff",
+            }}
+          >
+            {t.tts}
+          </button>
+        )}
       </div>
 
       {runner.error && (
