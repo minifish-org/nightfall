@@ -8,3 +8,8 @@ dist/
 .vite/
 coverage/
 .claude/settings.local.json
+
+# TLS certs/keys (e.g. accidental `tailscale cert` output) — never commit
+*.crt
+*.key
+*.pem
