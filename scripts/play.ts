@@ -7,7 +7,7 @@
 //   pnpm play --seed 7 --base-url http://127.0.0.1:8080 --tenant nightfall
 //
 // Requires a running agentd with werewolf-wolf / werewolf-seer /
-// werewolf-villager registered (see scripts/register-agents.sh).
+// werewolf-villager registered (those agents are defined in the agentd repo).
 
 import { AgentdClient } from "../agentd-client/index.js";
 import { createGame, ROLE_AGENT_REF } from "../engine/index.js";

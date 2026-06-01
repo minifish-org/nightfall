@@ -128,17 +128,11 @@ describe("day_vote — banish", () => {
   });
 });
 
-describe("victory (屠边 / slaughter-one-side)", () => {
+describe("victory (屠民 / kill the villager side)", () => {
   it("good wins when wolves reach 0", () => {
     const s = createGame(7);
     const dead: GameState = { ...s, seats: s.seats.map((x) => (x.role === "wolf" ? { ...x, alive: false } : x)) };
     expect(checkVictory(dead)).toBe("good");
-  });
-
-  it("wolves win when the god side (seer) is wiped out", () => {
-    const s = createGame(7);
-    const seats = s.seats.map((x) => (x.role === "seer" ? { ...x, alive: false } : { ...x }));
-    expect(checkVictory({ ...s, seats })).toBe("wolf");
   });
 
   it("wolves win when all villagers are wiped out", () => {
@@ -147,17 +141,28 @@ describe("victory (屠边 / slaughter-one-side)", () => {
     expect(checkVictory({ ...s, seats })).toBe("wolf");
   });
 
-  it("game continues while both a villager and the seer survive", () => {
-    expect(checkVictory(createGame(7))).toBeNull(); // everyone alive
+  it("killing the seer does NOT end the game while villagers survive", () => {
+    const s = createGame(7);
+    const seats = s.seats.map((x) => (x.role === "seer" ? { ...x, alive: false } : { ...x }));
+    expect(checkVictory({ ...s, seats })).toBeNull(); // seer dead, villagers alive → continue
   });
 
-  it("a night kill that removes the seer ends the game (wolf win)", () => {
+  it("game continues with everyone alive", () => {
+    expect(checkVictory(createGame(7))).toBeNull();
+  });
+
+  it("a night kill removing the LAST villager ends the game (wolf win)", () => {
     const base = createGame(7);
     const wolves = roleSeats(base, "wolf");
-    const seer = base.seats.find((x) => x.role === "seer")!.seat;
-    const s: GameState = { ...base, phase: "night_wolf" }; // everyone alive, wolves act
-    const { state: after, events } = reduce(s, new Map(wolves.map((w) => [w, dec("kill", seer)])));
-    expect(after.seats.find((x) => x.seat === seer)!.alive).toBe(false);
+    const villagers = roleSeats(base, "villager");
+    const lastVillager = villagers[0]!;
+    // Pre-kill the other two villagers; only one villager + wolves + seer alive.
+    const seats = base.seats.map((x) =>
+      x.role === "villager" && x.seat !== lastVillager ? { ...x, alive: false } : { ...x },
+    );
+    const s: GameState = { ...base, phase: "night_wolf", seats };
+    const { state: after, events } = reduce(s, new Map(wolves.map((w) => [w, dec("kill", lastVillager)])));
+    expect(after.seats.find((x) => x.seat === lastVillager)!.alive).toBe(false);
     expect(after.phase).toBe("game_over");
     expect(after.winner).toBe("wolf");
     expect(events.some((e) => e.type === "game_over")).toBe(true);

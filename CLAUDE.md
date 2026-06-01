@@ -13,10 +13,13 @@ component that ever sees it in full.
 ## The four hard rules (non-negotiable)
 
 1. **Never modify, fork, or embed agentd.** It lives in a separate repo
-   (`/Users/yusp/work/agentd`) and is consumed over HTTP only. Zero werewolf
-   rules go into agentd — seat manifests live in `agents/` here but are *applied
-   to* the external agentd. A seat is a stateless brain: decision = f(persona,
-   view).
+   (`/Users/yusp/work/agentd`) and is consumed over HTTP only. **agentd owns the
+   agent definitions** — the `werewolf-wolf/seer/villager` agents (persona +
+   model, on agentd's `builtin://generic-agent`) are defined and registered in
+   the agentd repo, NOT here. Nightfall does not write or apply manifests; it
+   only maps `role → agent_ref` (`engine/agent-map.ts`), sends the projected
+   view, and reads the decision. Zero werewolf rules go into agentd — a seat is
+   a stateless brain: decision = f(persona, view).
 2. **The referee is the single authority and the only holder of full state.**
    Each seat receives only a **view projection** (`engine/projection.ts`,
    `viewFor`) — an allowlist of what it may know. This is the information-hiding
@@ -55,10 +58,10 @@ for each phase until game_over:
   if the seat is entitled to it — never strip from full state).
 - **Phase FSM:** `night_seer → night_wolf → day_discuss → day_vote → night_seer`
   (day increments on day_vote→night_seer), ending in `game_over`. Victory is
-  checked after each lethal phase. **Win rule is 屠边** (`engine/victory.ts`):
-  good wins when wolves=0; wolves win when all villagers are dead OR all gods
-  are dead — and the only god is the seer, so killing the seer is an instant
-  wolf win. Illegal actions/targets degrade to no-op, so a flaky agent can never
+  checked after each lethal phase. **Win rule is 屠民** (`engine/victory.ts`):
+  good wins when wolves=0; wolves win when all 3 villagers are dead. Killing the
+  seer no longer ends the game (it only costs good its information) — 屠边 with a
+  single god was too wolf-favored. Illegal actions/targets degrade to no-op, so a flaky agent can never
   wedge a game.
 - **orchestrator/** is environment-agnostic. `run.ts` imports only the engine;
   `agentd-caller.ts` is the concrete network binding (`createAgentdCaller`). The
@@ -68,9 +71,9 @@ for each phase until game_over:
 
 ## The contract (defined here; agentd only passes it through)
 
-- Referee → seat: `POST /v1/turns` with `payload = { input: <SeatView> }`. The
-  real `simple-bot` wasm reads `payload.input` as the model's content (verified
-  in agentd `apps/simple-bot/agent/src/lib.rs`). View shape =
+- Referee → seat: `POST /v1/turns` with `payload = { input: <SeatView> }`.
+  agentd's built-in generic agent reads `payload.input` as the model's content.
+  View shape =
   `{ phase, game_id, day, you:{seat,role}, setup:{seats,roles}, alive_seats,
   dead_seats, public_log, private, valid_targets }`; `private` is `{teammates,
   teammate_intents?}` for wolves, `{checks}` for the seer, `{}` otherwise.
@@ -88,7 +91,7 @@ for each phase until game_over:
 - **Output language is dynamic, no re-registration.** The personas are
   registered once with "reply in the language given by `input.lang`"; the
   referee sets it per turn — `agentd-caller` sends `payload.input = { ...view,
-  lang }` (the wasm forwards only `payload.input`, so `lang` rides inside it).
+  lang }` (the agent forwards only `payload.input`, so `lang` rides inside it).
   The UI language toggle drives both the UI strings (`app/i18n.ts`) and the
   `lang` sent, fixed per game at Start. `viewFor` stays pure rules — the caller,
   not the engine, attaches `lang`.
@@ -107,13 +110,13 @@ pnpm vitest run engine/projection.test.ts  # one file
 pnpm vitest run -t "information hiding"     # one test by name
 pnpm typecheck                             # tsc --noEmit
 pnpm build                                 # typecheck + production build
-AGENTD_CLI=/Users/yusp/work/agentd/target/debug/agentd-cli pnpm agents:register
 pnpm smoke                                 # POST one sample turn, print final_decision
 ```
 
-Default tenant is **`demo`**. Seat manifests run on agentd's built-in generic
-agent (`builtin://generic-agent`) — no wasm to publish. Local agentd is
-`http://127.0.0.1:8080`; production is over Tailscale. Override with
+Default tenant is **`demo`**. The `werewolf-*` agents are defined and registered
+in the agentd repo (on `builtin://generic-agent`); nightfall just references them
+by `agent_ref`. Local agentd is `http://127.0.0.1:8080`; production is over
+Tailscale. Override with
 `--tenant` / `--base-url` (CLI) or `VITE_AGENTD_URL` / `VITE_AGENTD_TENANT`
 (browser). agentd has permissive CORS so the browser connects directly.
 
@@ -127,5 +130,6 @@ agent (`builtin://generic-agent`) — no wasm to publish. Local agentd is
 - `scripts/play.ts` runs under `tsx`.
 - Extending the board (witch/guard/hunter, more seats): add the role/phase to
   `engine/types.ts`, extend `currentActors`/`validTargets`/`reduce`, **add new
-  knowledge to `viewFor` only for the entitled role**, register a persona
-  manifest in `agents/`, and add a projection test.
+  knowledge to `viewFor` only for the entitled role**, map the new role to its
+  `agent_ref` in `engine/agent-map.ts` (define that agent in the agentd repo),
+  and add a projection test.

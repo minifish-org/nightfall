@@ -13,7 +13,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "play": "tsx scripts/play.ts",
-    "agents:register": "bash scripts/register-agents.sh",
     "smoke": "bash scripts/smoke-turn.sh"
   },
   "dependencies": {

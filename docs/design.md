@@ -17,15 +17,15 @@ game live, with no game rules in the React layer.
   4. `day_discuss` — each living seat speaks once (one round, seat order).
   5. `day_vote` — each living seat votes one target or abstains; plurality banished (ties → seeded RNG) → ≤1 death.
   6. resolve → victory check → back to step 1 (`day` increments).
-- Victory (屠边, checked after each death): wolves = 0 → **good** wins; all villagers dead OR all gods (the seer) dead → **wolf** wins; else continue. (Updated from the original parity rule per /goal follow-up.)
+- Victory (屠民, checked after each death): wolves = 0 → **good** wins; all 3 villagers dead → **wolf** wins; else continue. Killing the seer does NOT end the game. (Iterated: parity → 屠边 → 屠民; 屠边 with a single god was too wolf-favored.)
 
 ## 2. Contract (defined here; agentd only passes it through)
 
 ### Referee → seat (the `POST /v1/turns` payload is `{ input: <view> }`)
 
-The real `simple-bot` wasm reads `payload.input` as the model's user content
-(verified in agentd `apps/simple-bot/agent/src/lib.rs`), so the view is nested
-under `input`.
+agentd's built-in generic agent reads `payload.input` as the model's user
+content, so the view is nested under `input`. (agentd dropped wasm; the generic
+agent is native, selected by `artifact_uri = "builtin://generic-agent"`.)
 
 ```jsonc
 {
@@ -77,10 +77,13 @@ orchestrator/  env-agnostic async driver (imports engine only in run.ts)
 agentd-client/ HTTP only — POST /v1/turns, tolerant JSON decode
 app/           React spectator (Goal 2) — renders observer events, zero rules
 scripts/
-  register-agents.sh   apply agents/*.toml to external agentd
+  smoke-turn.sh        probe one /v1/turns against agentd
   play.ts              Node CLI: createGame → runGame → transcript
-agents/        wolf/seer/villager manifests (persona + strict-JSON instruction)
 ```
+
+The `werewolf-wolf/seer/villager` agents (persona + model) are defined and
+registered in the **agentd repo**, not here. Nightfall only maps role →
+agent_ref (`engine/agent-map.ts`) and consumes them over HTTP.
 
 ### Engine API (pure reducer)
 
@@ -132,7 +135,7 @@ client-side timeout and the orchestrator never blocks on a single seat.
   contains a role.
 - Night-kill aggregation (plurality + seeded tie-break).
 - Vote banish + tie + all-abstain.
-- Victory: wolves=0 (good), all villagers dead (wolf), seer dead (wolf).
+- Victory: wolves=0 (good), all villagers dead (wolf); seer death does NOT win.
 - Deterministic replay: same seed + same decision sequence ⇒ identical end state.
 - Orchestrator: injected fake `agentCaller` + fixed seed plays a full game to a
   winner with no network.

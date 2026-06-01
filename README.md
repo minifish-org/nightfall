@@ -13,7 +13,7 @@ authoritative game state and decides what each AI seat is allowed to see.
 └─────────────────────────│──────────────────────────────────────────────────┘
                           ▼  POST /v1/turns  { payload: { input: <view> } }
                    ┌──────────────┐   external, never modified
-                   │   agentd     │   wasm brains (persona + view → decision)
+                   │   agentd     │   agent brains (persona + view → decision)
                    └──────────────┘
 ```
 
@@ -22,15 +22,17 @@ authoritative game state and decides what each AI seat is allowed to see.
   **projected view** as `payload.input` and reads back a structured decision
   from `output.final_decision`.
 - **agentd is an external dependency** (`/Users/yusp/work/agentd`), consumed over
-  HTTP only — never forked, embedded, or taught any werewolf rules.
+  HTTP only — never forked, embedded, or taught any werewolf rules. agentd owns
+  the `werewolf-*` agent definitions (persona + model); nightfall only picks the
+  `agent_ref` per role and never writes or registers manifests.
 - The Node CLI and the browser spectator reuse the **same** engine + orchestrator
   — the game loop is written once.
 
 Board (see `/goal`): 6 seats — **2 wolf + 1 seer + 3 villager**, good 4 vs wolf 2,
 no role reveal on death. Round loop: `night_seer → night_wolf → day_discuss →
-day_vote → …`. Victory (屠边, checked after each death): wolves=0 → good wins;
-all villagers dead OR the seer dead → wolves win (so killing the seer is an
-instant wolf win). Full design in [docs/design.md](docs/design.md).
+day_vote → …`. Victory (屠民, checked after each death): wolves=0 → good wins;
+all 3 villagers dead → wolves win. Killing the seer doesn't end the game (it only
+removes good's information). Full design in [docs/design.md](docs/design.md).
 
 ## Layout
 
@@ -40,49 +42,39 @@ instant wolf win). Full design in [docs/design.md](docs/design.md).
 | `orchestrator/`  | Environment-agnostic `runGame({ state, agentCaller, observer, options })` + the agentd-backed `agentCaller`. |
 | `agentd-client/` | HTTP client for `POST /v1/turns` + tolerant decision decoding.    |
 | `app/`           | React spectator (god-view, timeline, playback controls). No game rules. |
-| `agents/`        | Seat manifests (one persona per role) applied to the external agentd. |
-| `scripts/`       | `register-agents.sh`, `smoke-turn.sh`, `play.ts` (CLI runner).    |
+| `scripts/`       | `smoke-turn.sh`, `play.ts` (CLI runner).                          |
+
+The `werewolf-wolf/seer/villager` agents (persona + model) live in the **agentd
+repo**, not here — nightfall only maps `role → agent_ref` in
+`engine/agent-map.ts`.
 
 ## Prerequisites
 
 - Node 18+ and `pnpm` (`npm i -g pnpm`).
-- A running **agentd** with the shared `simple-bot` wasm published (it ships in
-  the `demo` tenant) and an OpenAI-compatible LLM provider configured — both in
-  the agentd repo, not here.
+- A running **agentd** with the `werewolf-wolf/seer/villager` agents registered
+  (they're defined in the agentd repo, on `builtin://generic-agent`) and an
+  OpenAI-compatible LLM provider configured — all on the agentd side, not here.
 
 ## Run against local agentd (`http://127.0.0.1:8080`)
 
-The default tenant is **`demo`**. The seat manifests run on agentd's built-in
-native generic agent (`artifact_uri = "builtin://generic-agent"`) — no wasm to
-build or publish; each manifest carries its own persona and model.
+The default tenant is **`demo`**. Nightfall references the agents by `agent_ref`
+(`werewolf-wolf/seer/villager`) — it does not define or register them; that's
+done in the agentd repo.
 
-**1. Register the three seat brains** (wolf / seer / villager) on the running
-agentd. The seat manifests live here; the `agentd-cli` that applies them lives
-in the agentd repo:
-
-```bash
-# Use a prebuilt CLI if you have one, else fall back to `cargo run`:
-AGENTD_CLI=/Users/yusp/work/agentd/target/debug/agentd-cli pnpm agents:register
-```
-
-`agents:register` applies `agents/*.toml` (tenant `demo`, running on agentd's
-built-in generic agent — persona and model live in each manifest). Override the
-CLI with `AGENTD_CLI=...` or point at the repo with `AGENTD_DIR=...`.
-
-**2. Smoke-test one turn** end-to-end:
+**1. Smoke-test one turn** end-to-end (confirms agentd is up and the agent answers):
 
 ```bash
 pnpm smoke                 # POST /v1/turns with a sample seer view, prints final_decision
 ```
 
-**3a. Play a full game headless (CLI)** — prints a transcript:
+**2a. Play a full game headless (CLI)** — prints a transcript:
 
 ```bash
 pnpm play --seed 7
 pnpm play --seed 7 --base-url http://127.0.0.1:8080 --tenant demo
 ```
 
-**3b. Or watch it in the browser:**
+**2b. Or watch it in the browser:**
 
 ```bash
 pnpm dev                   # http://localhost:5173

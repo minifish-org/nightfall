@@ -1,14 +1,14 @@
 import type { Faction, GameState } from "./types.js";
 
 /**
- * Win condition, checked after every death — "屠边" (slaughter-one-side):
- *  - wolves = 0                          → good wins
- *  - all villagers dead OR all gods dead → wolves win
+ * Win condition, checked after every death — "屠民" (kill the villager side):
+ *  - wolves = 0        → good wins
+ *  - all villagers dead → wolves win
  *  - otherwise null (continue)
  *
- * On this board the only god is the seer, so killing the seer ends the game in
- * a wolf win (屠神边); wiping the 3 villagers does too (屠民边). Good wins only
- * by eliminating both wolves.
+ * Killing the seer no longer ends the game (it only costs good its information);
+ * wolves must eliminate all 3 villagers (by night kill or day banish) while
+ * keeping at least one wolf alive. Good wins only by voting out both wolves.
  */
 export function checkVictory(state: GameState): Faction | null {
   const alive = state.seats.filter((s) => s.alive);
@@ -16,8 +16,7 @@ export function checkVictory(state: GameState): Faction | null {
   if (wolves === 0) return "good";
 
   const villagers = alive.filter((s) => s.role === "villager").length;
-  const gods = alive.filter((s) => s.role === "seer").length;
-  if (villagers === 0 || gods === 0) return "wolf";
+  if (villagers === 0) return "wolf";
 
   return null;
 }

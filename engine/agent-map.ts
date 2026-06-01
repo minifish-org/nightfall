@@ -1,10 +1,10 @@
 import type { Role } from "./types.js";
 
 /**
- * A seat's "brain" is the agentd agent_ref selected by its role. The same
- * generic wasm is registered three times with different personas — see
- * agents/*.toml. A seat's identity is (agent_ref, scope) where
- * scope = game/<gameId>/seat/<n>.
+ * A seat's "brain" is the agentd agent_ref selected by its role. Those agents
+ * (one persona per role, on agentd's built-in generic agent) are defined and
+ * registered in the agentd repo — nightfall only chooses which ref a role uses.
+ * A seat's identity is (agent_ref, scope) where scope = game/<gameId>/seat/<n>.
  */
 export const ROLE_AGENT_REF: Record<Role, string> = {
   wolf: "werewolf-wolf",

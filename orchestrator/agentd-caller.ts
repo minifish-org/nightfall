@@ -18,29 +18,48 @@ export interface AgentdCallerConfig {
    * switching language needs NO agent re-registration. Defaults to "zh".
    */
   lang?: string;
+  /**
+   * Extra attempts when a turn yields no usable decision. The common failure is
+   * agentd's `plan.generate` rejecting a non-JSON LLM reply ("response did not
+   * contain valid JSON object") → the run Fails → final_decision is null. With
+   * temperature > 0 a fresh attempt usually parses, so we retry before giving up
+   * (which would degrade the seat to a fallback). Default 2 (→ 3 attempts).
+   */
+  retries?: number;
 }
 
 /**
  * Concrete AgentCaller backed by a live agentd. Sends the projected view as
- * `payload.input` (the shape the simple-bot wasm reads) and coerces the emitted
- * final_decision into a Decision. Throws on an unusable response so the
- * orchestrator degrades and marks the step as errored.
+ * `payload.input` (the shape agentd's generic agent reads) and coerces the emitted
+ * final_decision into a Decision. Retries a few times on an unusable response;
+ * if all attempts fail it throws, so the orchestrator degrades and marks the
+ * step errored.
  */
 export function createAgentdCaller(cfg: AgentdCallerConfig): AgentCaller {
+  const attempts = Math.max(1, (cfg.retries ?? 2) + 1);
   return async ({ seat, role, view }) => {
     const agentRef = roleAgentRef(role, cfg.pool);
     const scope = seatScope(cfg.gameId, seat);
-    const res = await cfg.client.submitTurn({
-      agentRef,
-      scope,
-      // `lang` rides inside `input` because the simple-bot wasm forwards only
-      // payload.input to the model (sibling fields are dropped).
-      payload: { input: { ...view, lang: cfg.lang ?? "zh" } },
-      wait: true,
-      ...(cfg.timeoutMs !== undefined ? { timeoutMs: cfg.timeoutMs } : {}),
-    });
-    if (res.timedOut) throw new Error(`seat ${seat} timed out`);
-    return toDecision(res.finalDecision);
+    let lastError: Error = new Error(`seat ${seat} produced no decision`);
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const res = await cfg.client.submitTurn({
+          agentRef,
+          scope,
+          // `lang` rides inside `input` because agentd's generic agent forwards
+          // only payload.input to the model (sibling fields are dropped).
+          payload: { input: { ...view, lang: cfg.lang ?? "zh" } },
+          wait: true,
+          ...(cfg.timeoutMs !== undefined ? { timeoutMs: cfg.timeoutMs } : {}),
+        });
+        if (res.timedOut) throw new Error(`seat ${seat} timed out`);
+        return toDecision(res.finalDecision);
+      } catch (e) {
+        lastError = e instanceof Error ? e : new Error(String(e));
+        // Fall through to retry; a fresh sample usually yields valid JSON.
+      }
+    }
+    throw lastError;
   };
 }
 
