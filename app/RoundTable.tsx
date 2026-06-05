@@ -81,7 +81,8 @@ export function RoundTable({
         const avatarCls = ["nf-avatar", s.role ? `r-${s.role}` : ""].filter(Boolean).join(" ");
         return (
           <div key={s.seat} className={cls} style={{ left: `${left}%`, top: `${top}%` }}>
-            {bubble && bubble.seat === s.seat && s.alive && <div className="nf-bubble">{bubble.text}</div>}
+            {/* No s.alive gate: last words are spoken by a just-eliminated seat. */}
+            {bubble && bubble.seat === s.seat && <div className="nf-bubble">{bubble.text}</div>}
             <div className={avatarCls}>
               {s.seat}
               {s.isHuman && <span className="you-tag" title={t.yourTurn}>🙋</span>}

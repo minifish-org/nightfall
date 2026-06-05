@@ -8,7 +8,7 @@ import { RoundTable, type TableSeat } from "./RoundTable.js";
 import { PhaseBanner } from "./PhaseBanner.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { HumanPanel, HumanInfo } from "./HumanPanel.js";
-import { UI } from "./i18n.js";
+import { UI, type Lang } from "./i18n.js";
 import { ttsSupported } from "./tts.js";
 import { publicTimeline, type PublicTimelineItem, type ViewMode } from "./spectate.js";
 import { loadConnection, saveConnection, type ConnectionSettings } from "./settings.js";
@@ -19,13 +19,22 @@ const randomSeed = () => Math.floor(Math.random() * 1_000_000_000);
 
 type Focus = { seat: number | null; bubble: { seat: number; text: string } | null };
 
-/** Most recent actor (+ speech bubble) in the CURRENT phase, god timeline. */
-function godFocus(items: TimelineItem[]): Focus {
+/** A vote rendered as a short bubble, e.g. "🗳️ → 3号" / "🗳️ 弃票". */
+function voteBubble(target: number | null, lang: Lang): string {
+  if (target === null) return `🗳️ ${UI[lang].abstainBtn}`;
+  return lang === "zh" ? `🗳️ → ${target}号` : `🗳️ → #${target}`;
+}
+
+/** Most recent actor (+ bubble) in the CURRENT phase, god timeline. Speeches and
+ *  last words bubble their `say`; votes bubble who they voted for. */
+function godFocus(items: TimelineItem[], lang: Lang): Focus {
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i]!;
     if (it.kind === "decision") {
       const say = it.say.trim();
-      const bubble = (it.phase === "day_discuss" || it.phase === "last_words") && say ? { seat: it.seat, text: say } : null;
+      let bubble: Focus["bubble"] = null;
+      if ((it.phase === "day_discuss" || it.phase === "last_words") && say) bubble = { seat: it.seat, text: say };
+      else if (it.phase === "day_vote") bubble = { seat: it.seat, text: voteBubble(it.action === "vote" ? it.target : null, lang) };
       return { seat: it.seat, bubble };
     }
     if (it.kind === "phase" || it.kind === "gameover") break;
@@ -34,11 +43,11 @@ function godFocus(items: TimelineItem[]): Focus {
 }
 
 /** Same, but from the public (spectator) timeline — no night actions exist here. */
-function pubFocus(items: PublicTimelineItem[]): Focus {
+function pubFocus(items: PublicTimelineItem[], lang: Lang): Focus {
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i]!;
     if (it.kind === "speech") return { seat: it.seat, bubble: { seat: it.seat, text: it.say } };
-    if (it.kind === "vote") return { seat: it.seat, bubble: null };
+    if (it.kind === "vote") return { seat: it.seat, bubble: { seat: it.seat, text: voteBubble(it.target, lang) } };
     if (it.kind === "phase" || it.kind === "gameover") break;
   }
   return { seat: null, bubble: null };
@@ -97,7 +106,7 @@ export function App() {
 
   let focus: Focus = { seat: null, bubble: null };
   if (game && !runner.winner) {
-    focus = mode === "god" ? godFocus(runner.timeline) : pubFocus(pubItems ?? []);
+    focus = mode === "god" ? godFocus(runner.timeline, lang) : pubFocus(pubItems ?? [], lang);
     // While it's the human's turn, spotlight them (their decision isn't logged yet).
     if (pending) focus = { seat: pending.seat, bubble: null };
   }
