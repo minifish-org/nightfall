@@ -1,18 +1,48 @@
 import { useEffect, useRef, useState } from "react";
 import { fallbackDecision, viewFor } from "@engine";
 import { DEFAULT_CONFIG, type SpectatorConfig } from "./config.js";
-import { Controls, ConfigForm, SeatPanel, Timeline } from "./components.js";
+import { Controls, ConfigForm, Timeline } from "./components.js";
 import { Settings } from "./SettingsPanel.js";
-import { SpectatorSeatPanel, SpectatorTimeline } from "./SpectatorView.js";
+import { SpectatorTimeline } from "./SpectatorView.js";
+import { RoundTable, type TableSeat } from "./RoundTable.js";
+import { PhaseBanner } from "./PhaseBanner.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { HumanPanel, HumanInfo } from "./HumanPanel.js";
 import { UI } from "./i18n.js";
 import { ttsSupported } from "./tts.js";
-import { publicSeats, publicTimeline, type ViewMode } from "./spectate.js";
+import { publicTimeline, type PublicTimelineItem, type ViewMode } from "./spectate.js";
 import { loadConnection, saveConnection, type ConnectionSettings } from "./settings.js";
 import { useGameRunner } from "./useGameRunner.js";
+import type { TimelineItem } from "./timeline.js";
 
 const randomSeed = () => Math.floor(Math.random() * 1_000_000_000);
+
+type Focus = { seat: number | null; bubble: { seat: number; text: string } | null };
+
+/** Most recent actor (+ speech bubble) in the CURRENT phase, god timeline. */
+function godFocus(items: TimelineItem[]): Focus {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (it.kind === "decision") {
+      const say = it.say.trim();
+      const bubble = (it.phase === "day_discuss" || it.phase === "last_words") && say ? { seat: it.seat, text: say } : null;
+      return { seat: it.seat, bubble };
+    }
+    if (it.kind === "phase" || it.kind === "gameover") break;
+  }
+  return { seat: null, bubble: null };
+}
+
+/** Same, but from the public (spectator) timeline — no night actions exist here. */
+function pubFocus(items: PublicTimelineItem[]): Focus {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (it.kind === "speech") return { seat: it.seat, bubble: { seat: it.seat, text: it.say } };
+    if (it.kind === "vote") return { seat: it.seat, bubble: null };
+    if (it.kind === "phase" || it.kind === "gameover") break;
+  }
+  return { seat: null, bubble: null };
+}
 
 export function App() {
   const [config, setConfig] = useState<SpectatorConfig>(DEFAULT_CONFIG);
@@ -54,15 +84,43 @@ export function App() {
   const playing = runner.status === "running" || runner.status === "paused";
   const lang = config.lang;
   const pending = runner.pendingHuman;
+  const game = runner.game;
   // The human seat's own private view, computed from full state — persistent so
   // the player can always see their role / seer checks / wolf teammates in play
   // mode (not only during their own turn or in god view).
-  const humanView = config.humanSeat !== null && runner.game ? viewFor(runner.game, config.humanSeat) : null;
+  const humanView = config.humanSeat !== null && game ? viewFor(game, config.humanSeat) : null;
+
+  // Roles only surface in god mode, or after the spectator clicks reveal (which
+  // is only available once the game is over) — so spectator play never leaks them.
+  const showRoles = mode === "god" || revealed;
+  const pubItems = game && mode === "spectator" ? publicTimeline(runner.timeline, lang) : null;
+
+  let focus: Focus = { seat: null, bubble: null };
+  if (game && !runner.winner) {
+    focus = mode === "god" ? godFocus(runner.timeline) : pubFocus(pubItems ?? []);
+    // While it's the human's turn, spotlight them (their decision isn't logged yet).
+    if (pending) focus = { seat: pending.seat, bubble: null };
+  }
+
+  const tableSeats: TableSeat[] = game
+    ? game.seats.map((s) => ({
+        seat: s.seat,
+        alive: s.alive,
+        diedPhase: s.diedPhase,
+        diedDay: s.diedDay,
+        isHuman: s.seat === config.humanSeat,
+        ...(showRoles ? { role: s.role } : {}),
+      }))
+    : [];
 
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", maxWidth: 1100, margin: "1.5rem auto", padding: "0 1rem" }}>
-      <h1>{t.title}</h1>
-      <p style={{ color: "#666", marginTop: -8 }}>{t.subtitle}</p>
+    <main className="nf-app" data-phase={game?.phase ?? "night_seer"} style={{ fontFamily: "var(--font)", maxWidth: 1180, margin: "1.5rem auto", padding: "0 1rem" }}>
+      <PhaseBanner phase={game?.phase ?? null} day={game?.day ?? 0} lang={lang} />
+
+      <header style={{ marginBottom: 10 }}>
+        <h1>{t.title}</h1>
+        <p style={{ color: "var(--text-dim)", marginTop: 2, fontSize: 13, maxWidth: 760 }}>{t.subtitle}</p>
+      </header>
 
       <Settings settings={connection} onChange={setConnection} lang={lang} />
 
@@ -77,35 +135,21 @@ export function App() {
         onStop={runner.stop}
       />
 
-      {/* view-mode toggle */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "4px 0 10px" }}>
-        <span style={{ fontSize: 13, color: "#555" }}>{t.viewModeLabel}:</span>
+      {/* view-mode + TTS toggles */}
+      <div className="nf-toolbar" style={{ margin: "4px 0 10px" }}>
+        <span style={{ fontSize: 13, color: "var(--text-dim)" }}>{t.viewModeLabel}:</span>
         {(["god", "spectator"] as ViewMode[]).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            style={{
-              padding: "3px 10px",
-              border: mode === m ? "2px solid #2563eb" : "1px solid #aaa",
-              borderRadius: 6,
-              background: mode === m ? "#dbeafe" : "#fff",
-            }}
-          >
+          <button key={m} className={`nf-toggle${mode === m ? " is-on" : ""}`} onClick={() => setMode(m)}>
             {m === "god" ? t.godMode : t.spectatorMode}
           </button>
         ))}
-        {mode === "spectator" && <span style={{ fontSize: 12, color: "#888" }}>{t.spectatorNote}</span>}
+        {mode === "spectator" && <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{t.spectatorNote}</span>}
         {ttsSupported() && (
           <button
+            className={`nf-toggle${ttsOn ? " is-on" : ""}`}
             onClick={() => setTtsOn((v) => !v)}
             title="实验性:用浏览器内置语音朗读公开发言/事件"
-            style={{
-              marginLeft: "auto",
-              padding: "3px 10px",
-              border: ttsOn ? "2px solid #2563eb" : "1px solid #aaa",
-              borderRadius: 6,
-              background: ttsOn ? "#dbeafe" : "#fff",
-            }}
+            style={{ marginLeft: "auto" }}
           >
             {t.tts}
           </button>
@@ -113,15 +157,15 @@ export function App() {
       </div>
 
       {runner.error && (
-        <p style={{ color: "crimson" }}>
+        <p style={{ color: "var(--blood)" }}>
           Error: {runner.error}
           <br />
-          <span style={{ color: "#888" }}>{t.unreachableHint(connection.baseUrl)}</span>
+          <span style={{ color: "var(--text-faint)" }}>{t.unreachableHint(connection.baseUrl)}</span>
         </p>
       )}
 
       {/* post-game summary + AI peer vote (roles shown in god mode, or after reveal) */}
-      {runner.winner && runner.game && (
+      {runner.winner && game && (
         <>
           {mode === "spectator" && (
             <button onClick={() => setRevealed((v) => !v)} style={{ margin: "4px 0" }}>
@@ -130,19 +174,18 @@ export function App() {
           )}
           <SummaryPanel
             lang={lang}
-            game={runner.game}
+            game={game}
             timeline={runner.timeline}
             connection={connection}
-            showRoles={mode === "god" || revealed}
+            showRoles={showRoles}
             humanSeat={config.humanSeat}
           />
         </>
       )}
 
-      {/* persistent private-info panel for the local human seat (always visible
-          in play mode; the turn panel below covers it during their own turn) */}
+      {/* persistent private-info panel for the local human seat */}
       {humanView && !pending && (
-        <div style={{ border: "1px solid #2563eb", borderRadius: 8, padding: "8px 12px", margin: "6px 0", background: "#f5f8ff" }}>
+        <div className="nf-panel" style={{ padding: "8px 12px", margin: "6px 0", borderColor: "var(--good)" }}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>
             🪪 {t.myPanelTitle} — {t.seat} {config.humanSeat}
           </div>
@@ -161,31 +204,30 @@ export function App() {
         />
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 360px) 1fr", gap: 20, marginTop: 8 }}>
+      <div className="nf-board">
         <section>
-          <h2 style={{ fontSize: 16 }}>{t.seats}</h2>
-          {runner.game === null ? (
-            <p style={{ color: "#888" }}>{t.noGame}</p>
-          ) : mode === "god" ? (
-            <SeatPanel lang={lang} game={runner.game} />
+          {game === null ? (
+            <p style={{ color: "var(--text-faint)", textAlign: "center", padding: "40px 0" }}>{t.startHint}</p>
           ) : (
-            <SpectatorSeatPanel
+            <RoundTable
               lang={lang}
-              seats={publicSeats(runner.game)}
-              phase={runner.game.phase}
-              day={runner.game.day}
+              seats={tableSeats}
+              day={game.day}
+              phase={game.phase}
               winner={runner.winner}
+              focusSeat={focus.seat}
+              bubble={focus.bubble}
             />
           )}
         </section>
         <section>
-          <h2 style={{ fontSize: 16 }}>{t.timeline}</h2>
+          <h2>{t.timeline}</h2>
           {runner.timeline.length === 0 ? (
-            <p style={{ color: "#888" }}>{t.startHint}</p>
+            <p style={{ color: "var(--text-faint)" }}>{t.startHint}</p>
           ) : mode === "god" ? (
             <Timeline lang={lang} items={runner.timeline} />
           ) : (
-            <SpectatorTimeline lang={lang} items={publicTimeline(runner.timeline, lang)} />
+            <SpectatorTimeline lang={lang} items={pubItems ?? []} />
           )}
         </section>
       </div>

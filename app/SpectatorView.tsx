@@ -67,40 +67,37 @@ export function SpectatorSeatPanel({
 export function SpectatorTimeline({ lang, items }: { lang: Lang; items: PublicTimelineItem[] }) {
   const t = UI[lang];
   return (
-    <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+    <div className="nf-log">
       {items.map((it) => {
         switch (it.kind) {
           case "phase":
             return (
-              <div key={it.id} style={{ marginTop: 12, fontWeight: 700, borderBottom: "1px solid #eee" }}>
+              <div key={it.id} className="phase-row">
                 {dayText(lang, it.day)} · {PHASE_LABEL[lang][it.phase]}
               </div>
             );
           case "speech":
             return (
-              <div key={it.id} style={{ marginLeft: 12 }}>
-                <span style={{ fontWeight: 600 }}>{t.seat} {it.seat}</span> “{it.say}”
+              <div key={it.id} className="row">
+                <span className="actor">{t.seat} {it.seat}</span> <span className="say">“{it.say}”</span>
               </div>
             );
           case "vote":
             return (
-              <div key={it.id} style={{ marginLeft: 12 }}>
-                <span style={{ fontWeight: 600 }}>{t.seat} {it.seat}</span>{" "}
+              <div key={it.id} className="row">
+                <span className="actor">{t.seat} {it.seat}</span>{" "}
                 {it.target !== null ? `🗳️ → ${it.target}` : `🗳️ ${t.abstainBtn}`}
               </div>
             );
           case "resolution":
             return (
-              <div
-                key={it.id}
-                style={{ marginLeft: 12, color: it.tone === "kill" ? "#a00" : it.tone === "safe" ? "#070" : "#225" }}
-              >
+              <div key={it.id} className={`row t-${it.tone}`}>
                 {it.text}
               </div>
             );
           case "gameover":
             return (
-              <div key={it.id} style={{ marginTop: 12, fontWeight: 800, fontSize: 18 }}>
+              <div key={it.id} className="gameover">
                 {winnerText(it.winner, lang)}
               </div>
             );

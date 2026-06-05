@@ -66,16 +66,7 @@ export function SummaryPanel({
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", margin: "2px 0" }}>
       <span style={{ fontSize: 13, width: 36 }}>{label}</span>
       {seatNums.map((n) => (
-        <button
-          key={n}
-          onClick={() => onPick(n)}
-          style={{
-            padding: "2px 8px",
-            border: picked === n ? "2px solid #2563eb" : "1px solid #aaa",
-            borderRadius: 6,
-            background: picked === n ? "#dbeafe" : "#fff",
-          }}
-        >
+        <button key={n} className={picked === n ? "nf-toggle is-on" : "nf-toggle"} onClick={() => onPick(n)}>
           {n}
         </button>
       ))}
@@ -83,8 +74,8 @@ export function SummaryPanel({
   );
 
   return (
-    <div style={{ border: "1px solid #c9a227", background: "#fffdf5", borderRadius: 8, padding: 12, margin: "8px 0" }}>
-      <div style={{ fontWeight: 700, fontSize: 16 }}>
+    <div className="nf-panel" style={{ padding: 12, margin: "8px 0", borderColor: "var(--gold)" }}>
+      <div style={{ fontWeight: 700, fontSize: 16, fontFamily: "var(--font-display)", color: "var(--gold)" }}>
         📜 {t.summaryTitle}
         {game.winner ? ` · ${winnerText(game.winner, lang)}` : ""}
       </div>
@@ -100,7 +91,7 @@ export function SummaryPanel({
 
       {/* the local human casts their own ballot (not the AI on their behalf) */}
       {humanSeat !== null && (
-        <div style={{ border: "1px dashed #2563eb", borderRadius: 6, padding: "6px 8px", margin: "6px 0", background: "#f5f8ff" }}>
+        <div style={{ border: "1px dashed var(--good)", borderRadius: 6, padding: "6px 8px", margin: "6px 0", background: "rgba(90,166,239,0.08)" }}>
           <div style={{ fontWeight: 600, fontSize: 13 }}>
             🙋 {t.yourBallot} {humanSeat})
           </div>
@@ -122,7 +113,7 @@ export function SummaryPanel({
         </button>
         {result &&
           (result.votes.length === 0 ? (
-            <span style={{ marginLeft: 8, color: "#a00" }}>{t.mvpNoVotes}</span>
+            <span style={{ marginLeft: 8, color: "var(--blood)" }}>{t.mvpNoVotes}</span>
           ) : (
             <div style={{ margin: "6px 0" }}>
               <div style={{ fontWeight: 600 }}>
@@ -131,7 +122,7 @@ export function SummaryPanel({
               <div style={{ fontWeight: 600 }}>
                 {t.worstLabel}: {tallyLine(result.worstTally, t.seat, t.votesUnit)}
               </div>
-              <ul style={{ fontSize: 12, color: "#555", margin: "4px 0" }}>
+              <ul style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0" }}>
                 {result.votes.map((v) => (
                   <li key={v.voter} style={v.human ? { fontWeight: 600 } : undefined}>
                     {t.seat} {v.voter}
@@ -148,7 +139,7 @@ export function SummaryPanel({
         <summary style={{ cursor: "pointer", fontSize: 13 }}>
           {t.recapEvents} ({recap.length})
         </summary>
-        <ol style={{ fontSize: 12, color: "#444", maxHeight: 220, overflow: "auto" }}>
+        <ol style={{ fontSize: 12, color: "var(--text-dim)", maxHeight: 220, overflow: "auto" }}>
           {recap.map((l, i) => (
             <li key={i}>{l}</li>
           ))}

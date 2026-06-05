@@ -91,13 +91,13 @@ export function Controls({
   const t = UI[lang];
   const active = status === "running" || status === "paused";
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0" }}>
+    <div className="nf-controls nf-toolbar" style={{ margin: "10px 0" }}>
       <button onClick={onStart}>{active ? t.restart : t.start}</button>
       <button onClick={onPause} disabled={status !== "running"}>{t.pause}</button>
       <button onClick={onResume} disabled={status !== "paused"}>{t.resume}</button>
       <button onClick={onStep} disabled={!active} title={t.stepTip}>{t.step}</button>
       <button onClick={onStop} disabled={!active}>{t.stop}</button>
-      <span style={{ marginLeft: 8, color: "#666" }}>{t.status}: <b>{status}</b></span>
+      <span style={{ marginLeft: 8, color: "var(--text-faint)" }}>{t.status}: <b style={{ color: "var(--text-dim)" }}>{status}</b></span>
     </div>
   );
 }
@@ -139,10 +139,10 @@ export function SeatPanel({ lang, game }: { lang: Lang; game: GameState | null }
   );
 }
 
-// ── Timeline ─────────────────────────────────────────────────────────────────
+// ── Timeline (battle log) ─────────────────────────────────────────────────────
 export function Timeline({ lang, items }: { lang: Lang; items: TimelineItem[] }) {
   return (
-    <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+    <div className="nf-log">
       {items.map((it) => (
         <TimelineRow key={it.id} lang={lang} item={it} />
       ))}
@@ -156,15 +156,15 @@ function TimelineRow({ lang, item }: { lang: Lang; item: TimelineItem }) {
   switch (item.kind) {
     case "phase":
       return (
-        <div style={{ marginTop: 12, fontWeight: 700, borderBottom: "1px solid #eee" }}>
+        <div className="phase-row">
           {dayLabel} · {PHASE_LABEL[lang][item.phase]}
-          <span style={{ fontWeight: 400, color: "#999" }}> · {t.acting}: {item.actors.join(", ") || "—"}</span>
+          <span style={{ fontWeight: 400, color: "var(--text-faint)" }}> · {t.acting}: {item.actors.join(", ") || "—"}</span>
         </div>
       );
     case "decision":
       return (
-        <div style={{ marginLeft: 12, color: item.error ? "#a00" : "#222" }}>
-          <span style={{ fontWeight: 600 }}>
+        <div className={`row${item.error ? " err" : ""}`}>
+          <span className="actor">
             {t.seat} {item.seat} ({ROLE_NAME[lang][item.role]}) [{ACTION_NAME[lang][item.action]}
             {item.target !== null ? ` → ${item.target}` : ""}]
           </span>
@@ -172,19 +172,15 @@ function TimelineRow({ lang, item }: { lang: Lang; item: TimelineItem }) {
             <span> ⚠️ {item.error} → {t.fallback}</span>
           ) : (
             <>
-              {item.say && <span> “{item.say}”</span>}
-              {item.reason && <span style={{ color: "#888", fontStyle: "italic" }}> · {item.reason}</span>}
+              {item.say && <span className="say"> “{item.say}”</span>}
+              {item.reason && <span className="reason"> · {item.reason}</span>}
             </>
           )}
         </div>
       );
     case "resolution":
-      return (
-        <div style={{ marginLeft: 12, color: item.tone === "kill" ? "#a00" : item.tone === "safe" ? "#070" : "#225" }}>
-          {item.text}
-        </div>
-      );
+      return <div className={`row t-${item.tone}`}>{item.text}</div>;
     case "gameover":
-      return <div style={{ marginTop: 12, fontWeight: 800, fontSize: 18 }}>{winnerText(item.winner, lang)}</div>;
+      return <div className="gameover">{winnerText(item.winner, lang)}</div>;
   }
 }

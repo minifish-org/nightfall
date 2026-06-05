@@ -1,0 +1,433 @@
+/* ─────────────────────────────────────────────────────────────────────────
+ * Nightfall — dark-night game theme.
+ * Design tokens (CSS custom properties) + global element theming + the
+ * round-table / phase-banner / timeline component classes. Loaded once in
+ * main.tsx. The page is dark and atmospheric; day/night shifts the ambient
+ * light via [data-phase] on .nf-app.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --bg-0: #080b14;
+  --bg-1: #0e1424;
+  --surface: #151d31;
+  --surface-2: #1c273f;
+  --surface-3: #243150;
+  --border: #2b3a59;
+  --border-soft: #213049;
+
+  --text: #e9edf8;
+  --text-dim: #98a4c2;
+  --text-faint: #66708c;
+
+  --moon: #eaf0ff;
+  --gold: #d8b15a;
+  --gold-soft: #b6914a;
+  --blood: #e05568;     /* wolves / death */
+  --blood-deep: #8f2030;
+  --good: #5aa6ef;      /* villagers / good */
+  --seer: #b58ce6;      /* seer */
+  --safe: #57c08a;      /* "survived the night" */
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--gold);
+
+  --font: "Avenir Next", "Segoe UI", system-ui, -apple-system, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", "Songti SC", Georgia,
+    serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg-0);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ambient backdrop: a moonlit gradient + faint starfield, fixed behind all. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, #1b2747 0%, rgba(27, 39, 71, 0) 60%),
+    radial-gradient(900px 600px at 85% 8%, rgba(90, 166, 239, 0.12) 0%, rgba(0, 0, 0, 0) 55%),
+    linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 70%);
+  transition: background 1.2s ease;
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.5) 50%, transparent 50%),
+    radial-gradient(1px 1px at 70% 20%, rgba(255, 255, 255, 0.35) 50%, transparent 50%),
+    radial-gradient(1px 1px at 40% 12%, rgba(255, 255, 255, 0.3) 50%, transparent 50%),
+    radial-gradient(1px 1px at 88% 40%, rgba(255, 255, 255, 0.25) 50%, transparent 50%),
+    radial-gradient(1px 1px at 12% 60%, rgba(255, 255, 255, 0.2) 50%, transparent 50%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Day breaks → warm the ambient light; night → cool and dim it. */
+.nf-app[data-phase^="day"] ~ #nf-ambient,
+.nf-app[data-phase^="day"] { --ambient: day; }
+.nf-app[data-phase^="day"] + #nf-noop { display: none; }
+
+/* Headings */
+h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  font-size: 26px;
+  margin: 0 0 2px;
+  color: var(--moon);
+  text-shadow: 0 0 18px rgba(90, 166, 239, 0.25);
+}
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+
+/* ── Form controls (global — rethemes every default-styled control) ───────── */
+button {
+  font: inherit;
+  color: var(--text);
+  background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 13px;
+  cursor: pointer;
+  transition: transform 0.08s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+button:hover:not(:disabled) {
+  border-color: var(--good);
+  box-shadow: 0 0 0 1px rgba(90, 166, 239, 0.3), 0 4px 14px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+button:active:not(:disabled) { transform: translateY(0); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* The primary call to action (Start) — moonlit gold. */
+.nf-controls button:first-child {
+  background: linear-gradient(180deg, var(--gold), var(--gold-soft));
+  border-color: var(--gold);
+  color: #1a1206;
+  font-weight: 700;
+}
+.nf-controls button:first-child:hover:not(:disabled) {
+  box-shadow: 0 0 18px rgba(216, 177, 90, 0.45);
+}
+
+input, select, textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--good);
+  box-shadow: 0 0 0 2px rgba(90, 166, 239, 0.25);
+}
+select option { background: var(--surface); }
+
+fieldset {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: rgba(21, 29, 49, 0.6);
+  backdrop-filter: blur(4px);
+}
+legend { color: var(--gold); font-weight: 600; padding: 0 6px; }
+label { color: var(--text-dim); font-size: 13px; }
+
+details > summary { color: var(--text-dim); }
+a { color: var(--good); }
+
+/* ── App shell ───────────────────────────────────────────────────────────── */
+.nf-app { transition: filter 1s ease; }
+
+.nf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.nf-toggle {
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+.nf-toggle.is-on {
+  background: linear-gradient(180deg, var(--good), #3f7fc4);
+  border-color: var(--good);
+  color: #061018;
+  font-weight: 600;
+}
+
+.nf-panel {
+  background: rgba(21, 29, 49, 0.7);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(6px);
+}
+
+/* ── Round table (centerpiece) ───────────────────────────────────────────── */
+.nf-stage {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  margin: 8px auto;
+  aspect-ratio: 1 / 0.84;
+}
+
+.nf-felt {
+  position: absolute;
+  inset: 12% 6%;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(120, 170, 255, 0.16), rgba(0, 0, 0, 0) 60%),
+    radial-gradient(ellipse at center, #1a2c46 0%, #11203a 55%, #0c1730 100%);
+  border: 1px solid rgba(120, 150, 210, 0.22);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.55), 0 18px 50px rgba(0, 0, 0, 0.5);
+  transition: background 1.2s ease, box-shadow 1.2s ease;
+}
+.nf-app[data-phase^="day"] .nf-felt {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(255, 224, 168, 0.2), rgba(0, 0, 0, 0) 60%),
+    radial-gradient(ellipse at center, #2a3147 0%, #20283c 55%, #171d2e 100%);
+  border-color: rgba(216, 177, 90, 0.3);
+}
+
+.nf-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 4px;
+  pointer-events: none;
+}
+.nf-orb {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #c9d6f5 45%, #7e8db8 100%);
+  box-shadow: 0 0 30px rgba(200, 215, 255, 0.55), inset -6px -6px 12px rgba(60, 70, 110, 0.6);
+  transition: background 1s ease, box-shadow 1s ease;
+}
+.nf-app[data-phase^="day"] .nf-orb {
+  background: radial-gradient(circle at 38% 32%, #fff6e0, #ffd87a 45%, #f0a83c 100%);
+  box-shadow: 0 0 38px rgba(255, 200, 110, 0.6);
+}
+.nf-center .day { font-family: var(--font-display); font-size: 15px; color: var(--moon); letter-spacing: 1px; }
+.nf-center .phase { font-size: 13px; color: var(--text-dim); }
+.nf-center .winner {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gold);
+  text-shadow: 0 0 20px rgba(216, 177, 90, 0.5);
+}
+
+/* Seats positioned around the ellipse (left/top set inline per seat). */
+.nf-seat {
+  position: absolute;
+  width: 92px;
+  margin-left: -46px;
+  margin-top: -42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.nf-avatar {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--moon);
+  background: linear-gradient(180deg, var(--surface-3), var(--surface));
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, filter 0.6s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.nf-seat .name { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.nf-seat .role { font-size: 11px; line-height: 1; }
+.nf-role-wolf { color: var(--blood); }
+.nf-role-seer { color: var(--seer); }
+.nf-role-villager { color: var(--good); }
+
+/* Role-tinted living avatars (god view / after reveal). */
+.nf-avatar.r-wolf { border-color: rgba(224, 85, 104, 0.6); }
+.nf-avatar.r-seer { border-color: rgba(181, 140, 230, 0.6); }
+.nf-avatar.r-villager { border-color: rgba(90, 166, 239, 0.5); }
+
+/* Currently-acting seat: a pulsing moonlit ring. */
+.nf-seat.acting .nf-avatar {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(216, 177, 90, 0.35), 0 0 22px rgba(216, 177, 90, 0.55);
+  animation: nf-pulse 1.4s ease-in-out infinite;
+}
+@keyframes nf-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(216, 177, 90, 0.3), 0 0 16px rgba(216, 177, 90, 0.4); }
+  50% { box-shadow: 0 0 0 5px rgba(216, 177, 90, 0.18), 0 0 30px rgba(216, 177, 90, 0.7); }
+}
+
+/* Human seat marker. */
+.nf-seat .you-tag {
+  position: absolute;
+  top: -8px;
+  right: -2px;
+  font-size: 13px;
+  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.6));
+}
+
+/* Dead seats fade to a cold grey with a marker. */
+.nf-seat.dead .nf-avatar { filter: grayscale(1) brightness(0.55); border-color: var(--border-soft); }
+.nf-seat.dead .name { color: var(--text-faint); }
+.nf-seat.dead .nf-avatar::after {
+  content: "☠";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: rgba(224, 85, 104, 0.85);
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+}
+.nf-seat .fate { font-size: 10px; color: var(--blood); }
+
+/* Speech bubble above the active speaker. */
+.nf-bubble {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 190px;
+  background: var(--moon);
+  color: #11203a;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 6px 9px;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 5;
+  animation: nf-bubble-in 0.25s ease both;
+}
+.nf-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--moon);
+  border-bottom: 0;
+}
+@keyframes nf-bubble-in {
+  from { opacity: 0; transform: translate(-50%, 6px) scale(0.9); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+/* ── Phase banner (transient announcement) ───────────────────────────────── */
+.nf-banner-wrap {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 50;
+}
+.nf-banner {
+  margin-top: 14vh;
+  padding: 14px 30px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--moon);
+  background: rgba(12, 18, 36, 0.82);
+  border: 1px solid rgba(120, 150, 210, 0.35);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), inset 0 0 30px rgba(90, 166, 239, 0.12);
+  backdrop-filter: blur(6px);
+  animation: nf-banner 1.8s ease both;
+}
+.nf-banner.day { border-color: rgba(216, 177, 90, 0.4); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), inset 0 0 30px rgba(255, 210, 120, 0.14); }
+@keyframes nf-banner {
+  0% { opacity: 0; transform: translateY(-16px) scale(0.96); }
+  18% { opacity: 1; transform: translateY(0) scale(1); }
+  82% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-10px) scale(0.98); }
+}
+
+/* ── Timeline / battle log ───────────────────────────────────────────────── */
+.nf-log { font-size: 14px; line-height: 1.5; }
+.nf-log .row { padding: 2px 0 2px 12px; border-left: 2px solid transparent; }
+.nf-log .phase-row {
+  margin-top: 14px;
+  padding: 4px 0 4px 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--gold);
+  border-bottom: 1px solid var(--border-soft);
+  letter-spacing: 0.5px;
+}
+.nf-log .actor { font-weight: 600; color: var(--text); }
+.nf-log .say { color: var(--text); }
+.nf-log .reason { color: var(--text-faint); font-style: italic; }
+.nf-log .err { color: var(--blood); }
+.nf-log .t-kill { color: var(--blood); border-left-color: var(--blood-deep); }
+.nf-log .t-safe { color: var(--safe); }
+.nf-log .t-info { color: var(--good); }
+.nf-log .gameover {
+  margin-top: 14px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--gold);
+}
+
+/* Layout: stage + log side by side on wide screens, stacked on narrow. */
+.nf-board {
+  display: grid;
+  grid-template-columns: 1fr minmax(300px, 380px);
+  gap: 22px;
+  margin-top: 10px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .nf-board { grid-template-columns: 1fr; }
+}

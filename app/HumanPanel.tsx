@@ -93,11 +93,11 @@ export function HumanPanel({
   };
 
   return (
-    <div style={{ border: "2px solid #2563eb", borderRadius: 8, padding: 12, margin: "10px 0", background: "#f5f8ff" }}>
-      <div style={{ fontWeight: 700, fontSize: 16 }}>
+    <div className="nf-panel" style={{ padding: 12, margin: "10px 0", borderColor: "var(--good)", borderWidth: 2 }}>
+      <div style={{ fontWeight: 700, fontSize: 16, color: "var(--good)" }}>
         🙋 {t.yourTurn} — {t.seat} {view.you.seat}
       </div>
-      <div style={{ fontSize: 13, color: "#334", margin: "2px 0 6px" }}>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", margin: "2px 0 6px" }}>
         {t.phaseWord} {phase} · {t.dayWord}
         {lang === "zh" ? `${req.day}${t.dayUnit}` : ` ${req.day}`}
       </div>
@@ -115,13 +115,8 @@ export function HumanPanel({
             {view.valid_targets.map((seat) => (
               <button
                 key={seat}
+                className={target === seat ? "nf-toggle is-on" : "nf-toggle"}
                 onClick={() => setTarget(seat)}
-                style={{
-                  padding: "4px 10px",
-                  border: target === seat ? "2px solid #2563eb" : "1px solid #aaa",
-                  borderRadius: 6,
-                  background: target === seat ? "#dbeafe" : "#fff",
-                }}
               >
                 {t.seat} {seat}
               </button>
