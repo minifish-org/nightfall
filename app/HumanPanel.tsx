@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { Action, Decision, Faction, Phase, SeatView } from "@engine";
+import type { SeatIdentityMap } from "@orchestrator";
 import type { AgentRequest } from "@orchestrator";
+import { characterLabel } from "./characters.js";
 import { ACTION_NAME, ROLE_NAME, UI, type Lang } from "./i18n.js";
 
 const factionTxt = (r: Faction, lang: Lang) => (r === "wolf" ? (lang === "zh" ? "狼" : "wolf") : lang === "zh" ? "好人" : "good");
@@ -10,8 +12,9 @@ const factionTxt = (r: Faction, lang: Lang) => (r === "wolf" ? (lang === "zh" ? 
  * teammates, and (during the kill turn) teammates' proposed kills. Reused by
  * the turn panel and the persistent panel. Shows only this seat's view.
  */
-export function HumanInfo({ view, lang }: { view: SeatView; lang: Lang }) {
+export function HumanInfo({ view, lang, identities }: { view: SeatView; lang: Lang; identities?: SeatIdentityMap }) {
   const t = UI[lang];
+  const name = (seat: number | null) => (identities ? characterLabel(identities, seat, lang) : `${t.seat} ${seat}`);
   const p = view.private;
   const checks = "checks" in p ? p.checks : null;
   const teammates = "teammates" in p ? p.teammates : null;
@@ -24,17 +27,17 @@ export function HumanInfo({ view, lang }: { view: SeatView; lang: Lang }) {
       {checks && (
         <div>
           🔮 {t.yourChecks}:{" "}
-          {checks.length === 0 ? t.noChecks : checks.map((c) => `${t.seat}${c.seat}→${factionTxt(c.result, lang)}`).join("  ")}
+          {checks.length === 0 ? t.noChecks : checks.map((c) => `${name(c.seat)}→${factionTxt(c.result, lang)}`).join("  ")}
         </div>
       )}
       {teammates && (
         <div>
-          🐺 {t.teammatesLabel}: {teammates.length ? teammates.map((s) => `${t.seat}${s}`).join("  ") : "—"}
+          🐺 {t.teammatesLabel}: {teammates.length ? teammates.map((s) => name(s)).join("  ") : "—"}
         </div>
       )}
       {intents.length > 0 && (
         <div>
-          🗡️ {t.intentsLabel}: {intents.map((i) => `${t.seat}${i.seat}→${i.target ?? "?"}`).join("  ")}
+          🗡️ {t.intentsLabel}: {intents.map((i) => `${name(i.seat)}→${i.target === null ? "?" : name(i.target)}`).join("  ")}
         </div>
       )}
     </div>
@@ -64,16 +67,19 @@ function phaseAction(phase: Phase): Action {
 export function HumanPanel({
   req,
   lang,
+  identities,
   onSubmit,
   onSkip,
 }: {
   req: AgentRequest;
   lang: Lang;
+  identities?: SeatIdentityMap;
   onSubmit: (d: Decision) => void;
   onSkip: () => void;
 }) {
   const t = UI[lang];
   const { phase, view } = req;
+  const name = (seat: number | null) => (identities ? characterLabel(identities, seat, lang) : `${t.seat} ${seat}`);
   const action = phaseAction(phase);
   const needsTarget = action === "check" || action === "kill" || action === "vote";
 
@@ -95,7 +101,7 @@ export function HumanPanel({
   return (
     <div className="nf-panel" style={{ padding: 12, margin: "10px 0", borderColor: "var(--good)", borderWidth: 2 }}>
       <div style={{ fontWeight: 700, fontSize: 16, color: "var(--good)" }}>
-        🙋 {t.yourTurn} — {t.seat} {view.you.seat}
+        🙋 {t.yourTurn} — {name(view.you.seat)}
       </div>
       <div style={{ fontSize: 13, color: "var(--text-dim)", margin: "2px 0 6px" }}>
         {t.phaseWord} {phase} · {t.dayWord}
@@ -103,7 +109,7 @@ export function HumanPanel({
       </div>
 
       {/* own private info (role / seer checks / wolf teammates + intents) */}
-      <HumanInfo view={view} lang={lang} />
+      <HumanInfo view={view} lang={lang} {...(identities ? { identities } : {})} />
 
       {/* controls by phase */}
       {needsTarget && (
@@ -118,7 +124,7 @@ export function HumanPanel({
                 className={target === seat ? "nf-toggle is-on" : "nf-toggle"}
                 onClick={() => setTarget(seat)}
               >
-                {t.seat} {seat}
+                {name(seat)}
               </button>
             ))}
           </div>

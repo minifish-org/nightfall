@@ -14,6 +14,7 @@ import { createGame, ROLE_AGENT_REF } from "../engine/index.js";
 import type { GameState, ResolutionEvent } from "../engine/index.js";
 import { createAgentdCaller, runGame } from "../orchestrator/index.js";
 import type { Observer } from "../orchestrator/index.js";
+import { characterLabel, characterMapForHuman } from "../app/characters.js";
 
 function arg(name: string, fallback?: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -37,8 +38,11 @@ const PHASE_LABEL: Record<string, string> = {
   day_vote: "🗳️  DAY — Vote",
 };
 
+const identities = characterMapForHuman(null);
+const playerName = (seat: number | null) => characterLabel(identities, seat, "zh", "abstain");
+
 function roleTag(state: GameState, seat: number): string {
-  return `${seat}(${state.seats.find((s) => s.seat === seat)!.role})`;
+  return `${playerName(seat)}(${state.seats.find((s) => s.seat === seat)!.role})`;
 }
 
 function describeResolution(state: GameState, e: ResolutionEvent): string | null {
@@ -48,12 +52,12 @@ function describeResolution(state: GameState, e: ResolutionEvent): string | null
     case "night_kill":
       return e.victim === null
         ? `   🌙 no one was killed`
-        : `   🔪 wolves killed seat ${roleTag(state, e.victim)}${e.tie ? " (tie → seeded)" : ""}`;
+        : `   🔪 wolves killed ${roleTag(state, e.victim)}${e.tie ? " (tie → seeded)" : ""}`;
     case "banish": {
-      const tally = Object.entries(e.tally).map(([s, n]) => `${s}:${n}`).join(" ") || "—";
+      const tally = Object.entries(e.tally).map(([s, n]) => `${playerName(Number(s))}:${n}`).join(" ") || "—";
       return e.victim === null
         ? `   ⚖️  no banishment (votes ${tally}, abstain ${e.abstains})`
-        : `   ⚖️  banished seat ${roleTag(state, e.victim)} (votes ${tally}, abstain ${e.abstains})${e.tie ? " (tie → seeded)" : ""}`;
+        : `   ⚖️  banished ${roleTag(state, e.victim)} (votes ${tally}, abstain ${e.abstains})${e.tie ? " (tie → seeded)" : ""}`;
     }
     case "game_over":
       return `\n🏁 GAME OVER — ${e.winner.toUpperCase()} wins`;
@@ -67,7 +71,7 @@ let lastPhaseKey = "";
 const observer: Observer = {
   onGameStart(state) {
     console.log(`\n=== Nightfall game ${state.game_id} (seed ${seed}) ===`);
-    console.log("Seats: " + state.seats.map((s) => roleTag(state, s.seat)).join("  "));
+    console.log("Players: " + state.seats.map((s) => roleTag(state, s.seat)).join("  "));
     console.log(`agentd: ${baseUrl}  tenant: ${tenant}\n`);
   },
   onPhaseStart(e) {
@@ -80,12 +84,12 @@ const observer: Observer = {
   onSeatDecision(e, state) {
     const who = roleTag(state, e.seat);
     if (e.error) {
-      console.log(`   ⚠️  seat ${who} [${e.decision.action}] error: ${e.error} → fallback`);
+      console.log(`   ⚠️  ${who} [${e.decision.action}] error: ${e.error} → fallback`);
       return;
     }
-    const tgt = e.decision.target !== null ? ` → ${e.decision.target}` : "";
+    const tgt = e.decision.target !== null ? ` → ${playerName(e.decision.target)}` : "";
     const say = e.decision.say ? `  “${e.decision.say}”` : "";
-    console.log(`   seat ${who} [${e.decision.action}${tgt}]${say}`);
+    console.log(`   ${who} [${e.decision.action}${tgt}]${say}`);
     if (e.decision.reason) console.log(`         · reason: ${e.decision.reason}`);
   },
   onResolution(e, state) {
@@ -100,7 +104,7 @@ const client = new AgentdClient({ baseUrl, tenant, token, defaultTimeoutMs: time
 // Unique game_id per run → fresh agentd scope (no context bleed across runs of
 // the same seed). Engine replay depends only on (seed, decisions), not game_id.
 const state = createGame(seed, `g${seed}-${Date.now().toString(36)}`);
-const agentCaller = createAgentdCaller({ client, gameId: state.game_id, timeoutMs });
+const agentCaller = createAgentdCaller({ client, gameId: state.game_id, timeoutMs, identities });
 
 console.log(`role → agent_ref: ${JSON.stringify(ROLE_AGENT_REF)}`);
 runGame({ state, agentCaller, observer })

@@ -1,5 +1,6 @@
 import { ROLE_AGENT_REF } from "@engine";
 import type { Role } from "@engine";
+import type { SeatIdentityMap } from "@orchestrator";
 import type { Lang } from "./i18n.js";
 
 /**
@@ -17,6 +18,8 @@ export interface SpectatorConfig {
   pool: Record<Role, string>;
   /** Seat number (1-6) played by a local human, or null = all AI. */
   humanSeat: number | null;
+  /** Public character identities for this game; derived at Start. */
+  identities?: SeatIdentityMap;
 }
 
 export const DEFAULT_CONFIG: SpectatorConfig = {

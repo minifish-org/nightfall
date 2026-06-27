@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Smoke-test one seat turn against a running agentd: POST /v1/turns with a
-# sample projected view and print the agent's final_decision. Use this to
+# Smoke-test one character turn against a running agentd: POST /v1/turns with a
+# sample projected roleplay view and print the agent's final_decision. Use this to
 # confirm the contract end-to-end before wiring the UI.
 #
 #   AGENTD_URL=http://127.0.0.1:8080 TENANT=demo AGENT_REF=werewolf-seer ./scripts/smoke-turn.sh
@@ -9,21 +9,41 @@ set -euo pipefail
 AGENTD_URL="${AGENTD_URL:-http://127.0.0.1:8080}"
 TENANT="${TENANT:-demo}"
 AGENT_REF="${AGENT_REF:-werewolf-seer}"
-SCOPE="${SCOPE:-game/smoke/seat/4}"
+SCOPE="${SCOPE:-game/smoke/player/nahida}"
 
-# A sample seer night view — exactly the shape the referee projects.
+# A sample seer night view — the roleplay shape sent as payload.input.
 read -r -d '' PAYLOAD <<'JSON' || true
 {
-  "you": 4,
-  "yourRole": "seer",
-  "yourFaction": "town",
-  "day": 1,
-  "phase": "night",
-  "alive": [1, 2, 3, 4, 5, 6],
-  "seatCount": 6,
-  "publicLog": [{ "kind": "game_start", "day": 1, "seats": 6, "board": "6p-standard" }],
-  "legalActions": ["check"],
-  "seerChecks": []
+  "input": {
+    "phase": "night_seer",
+    "game_id": "smoke",
+    "day": 1,
+    "you": { "role": "seer", "character": { "id": "nahida", "zh": "纳西妲", "en": "Nahida" } },
+    "setup": { "seats": 6, "wolves": 2, "seers": 1, "villagers": 3 },
+    "alive_characters": [
+      { "id": "venti", "zh": "温迪", "en": "Venti" },
+      { "id": "zhongli", "zh": "钟离", "en": "Zhongli" },
+      { "id": "raiden_shogun", "zh": "雷电将军", "en": "Raiden Shogun" },
+      { "id": "nahida", "zh": "纳西妲", "en": "Nahida" },
+      { "id": "furina", "zh": "芙宁娜", "en": "Furina" },
+      { "id": "mavuika", "zh": "玛薇卡", "en": "Mavuika" }
+    ],
+    "dead_characters": [],
+    "public_log": [],
+    "private": { "checks": [] },
+    "valid_targets": [
+      { "id": "venti", "zh": "温迪", "en": "Venti" },
+      { "id": "zhongli", "zh": "钟离", "en": "Zhongli" },
+      { "id": "raiden_shogun", "zh": "雷电将军", "en": "Raiden Shogun" },
+      { "id": "furina", "zh": "芙宁娜", "en": "Furina" },
+      { "id": "mavuika", "zh": "玛薇卡", "en": "Mavuika" }
+    ],
+    "roleplay": {
+      "target_format": "character_id",
+      "instruction": "你正在扮演纳西妲。公开发言请称呼其他玩家的角色名,不要使用座位号。如果需要选择目标,target 必须严格填写 valid_targets[].id 里的一个 id。"
+    },
+    "lang": "zh"
+  }
 }
 JSON
 

@@ -1,7 +1,9 @@
 import type { GameState, Role } from "@engine";
+import type { SeatIdentityMap } from "@orchestrator";
 import type { SpectatorConfig } from "./config.js";
 import type { RunStatus } from "./useGameRunner.js";
 import { ACTION_NAME, PHASE_LABEL, ROLE_NAME, UI, winnerText, type Lang } from "./i18n.js";
+import { ARCHON_CHARACTERS, characterForSeat, characterLabel, characterName } from "./characters.js";
 import type { TimelineItem } from "./timeline.js";
 
 const ROLE_EMOJI: Record<Role, string> = { wolf: "🐺", seer: "🔮", villager: "🧑‍🌾" };
@@ -45,9 +47,9 @@ export function ConfigForm({
           onChange={(e) => set("humanSeat", e.target.value === "" ? null : Number(e.target.value))}
         >
           <option value="">{t.humanNone}</option>
-          {[1, 2, 3, 4, 5, 6].map((n) => (
-            <option key={n} value={n}>
-              {t.seat} {n}
+          {ARCHON_CHARACTERS.map((character, i) => (
+            <option key={character.id} value={i + 1}>
+              {characterName(character, config.lang)}
             </option>
           ))}
         </select>
@@ -103,7 +105,7 @@ export function Controls({
 }
 
 // ── Seat panel (god view) ────────────────────────────────────────────────────
-export function SeatPanel({ lang, game }: { lang: Lang; game: GameState | null }) {
+export function SeatPanel({ lang, game, identities }: { lang: Lang; game: GameState | null; identities?: SeatIdentityMap }) {
   const t = UI[lang];
   if (!game) return <p style={{ color: "#888" }}>{t.noGame}</p>;
   const dayLabel = lang === "zh" ? `${t.dayWord}${game.day}${t.dayUnit}` : `${t.dayWord} ${game.day}`;
@@ -118,11 +120,11 @@ export function SeatPanel({ lang, game }: { lang: Lang; game: GameState | null }
             padding: 8,
             opacity: s.alive ? 1 : 0.45,
             background: s.alive ? "#fff" : "#f3f3f3",
-          }}
-        >
-          <div style={{ fontWeight: 600 }}>
-            {ROLE_EMOJI[s.role]} {t.seat} {s.seat} {s.alive ? "" : "💀"}
-          </div>
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>
+              {ROLE_EMOJI[s.role]} {identities ? characterName(characterForSeat(identities, s.seat), lang) : `${t.seat} ${s.seat}`} {s.alive ? "" : "💀"}
+            </div>
           <div style={{ fontSize: 12, color: "#666" }}>{ROLE_NAME[lang][s.role]}</div>
           {!s.alive && (
             <div style={{ fontSize: 12, color: "#a00" }}>
@@ -140,33 +142,38 @@ export function SeatPanel({ lang, game }: { lang: Lang; game: GameState | null }
 }
 
 // ── Timeline (battle log) ─────────────────────────────────────────────────────
-export function Timeline({ lang, items }: { lang: Lang; items: TimelineItem[] }) {
+export function Timeline({ lang, items, identities }: { lang: Lang; items: TimelineItem[]; identities?: SeatIdentityMap }) {
   return (
     <div className="nf-log">
       {items.map((it) => (
-        <TimelineRow key={it.id} lang={lang} item={it} />
+        <TimelineRow key={it.id} lang={lang} item={it} {...(identities ? { identities } : {})} />
       ))}
     </div>
   );
 }
 
-function TimelineRow({ lang, item }: { lang: Lang; item: TimelineItem }) {
+function TimelineRow({ lang, item, identities }: { lang: Lang; item: TimelineItem; identities?: SeatIdentityMap }) {
   const t = UI[lang];
   const dayLabel = lang === "zh" ? `${t.dayWord}${item.kind === "gameover" ? "" : item.day}${t.dayUnit}` : `${t.dayWord} ${item.kind === "gameover" ? "" : item.day}`;
+  const actor = (seat: number | null) => {
+    const fallback = lang === "zh" ? "弃票" : "abstain";
+    if (seat === null) return fallback;
+    return identities ? characterLabel(identities, seat, lang, fallback) : `${seat}`;
+  };
   switch (item.kind) {
     case "phase":
       return (
         <div className="phase-row">
           {dayLabel} · {PHASE_LABEL[lang][item.phase]}
-          <span style={{ fontWeight: 400, color: "var(--text-faint)" }}> · {t.acting}: {item.actors.join(", ") || "—"}</span>
+          <span style={{ fontWeight: 400, color: "var(--text-faint)" }}> · {t.acting}: {item.actors.map((seat) => actor(seat)).join(", ") || "—"}</span>
         </div>
       );
     case "decision":
       return (
         <div className={`row${item.error ? " err" : ""}`}>
           <span className="actor">
-            {t.seat} {item.seat} ({ROLE_NAME[lang][item.role]}) [{ACTION_NAME[lang][item.action]}
-            {item.target !== null ? ` → ${item.target}` : ""}]
+            {actor(item.seat)} ({ROLE_NAME[lang][item.role]}) [{ACTION_NAME[lang][item.action]}
+            {item.target !== null ? ` → ${actor(item.target)}` : ""}]
           </span>
           {item.error ? (
             <span> ⚠️ {item.error} → {t.fallback}</span>

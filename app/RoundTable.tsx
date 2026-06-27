@@ -1,4 +1,6 @@
 import type { DeathPhase, Faction, Phase, Role } from "@engine";
+import type { CharacterIdentity } from "@orchestrator";
+import { characterName } from "./characters.js";
 import { PHASE_LABEL, ROLE_NAME, UI, winnerText, type Lang } from "./i18n.js";
 
 const ROLE_EMOJI: Record<Role, string> = { wolf: "🐺", seer: "🔮", villager: "🧑‍🌾" };
@@ -10,6 +12,7 @@ const ROLE_EMOJI: Record<Role, string> = { wolf: "🐺", seer: "🔮", villager:
  */
 export interface TableSeat {
   seat: number;
+  character: CharacterIdentity;
   alive: boolean;
   role?: Role;
   diedPhase?: DeathPhase | null;
@@ -79,16 +82,18 @@ export function RoundTable({
         const acting = focusSeat === s.seat && s.alive && !winner;
         const cls = ["nf-seat", s.alive ? "" : "dead", acting ? "acting" : ""].filter(Boolean).join(" ");
         const avatarCls = ["nf-avatar", s.role ? `r-${s.role}` : ""].filter(Boolean).join(" ");
+        const name = characterName(s.character, lang);
         return (
           <div key={s.seat} className={cls} style={{ left: `${left}%`, top: `${top}%` }}>
             {/* No s.alive gate: last words are spoken by a just-eliminated seat. */}
             {bubble && bubble.seat === s.seat && <div className="nf-bubble">{bubble.text}</div>}
-            <div className={avatarCls}>
-              {s.seat}
+            <div className={avatarCls} title={name}>
+              {s.character.avatarUrl && <img className="nf-avatar-img" src={s.character.avatarUrl} alt={name} onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+              <span className="nf-avatar-fallback">{name.slice(0, 1)}</span>
               {s.isHuman && <span className="you-tag" title={t.yourTurn}>🙋</span>}
             </div>
             <div className="name">
-              {t.seat} {s.seat}
+              {name}
             </div>
             {s.role && (
               <div className={`role nf-role-${s.role}`}>

@@ -7,7 +7,7 @@ import type { AgentCaller, AgentRequest, Observer } from "@orchestrator";
 import type { SpectatorConfig } from "./config.js";
 import type { ConnectionSettings } from "./settings.js";
 import { Pacer } from "./pacer.js";
-import { resolutionText } from "./i18n.js";
+import { actorName, resolutionText } from "./i18n.js";
 import { cancelSpeech, speak, speechIdle } from "./tts.js";
 import type { TimelineItem } from "./timeline.js";
 
@@ -82,7 +82,13 @@ export function useGameRunner() {
         tenant: connection.tenant,
         token: connection.token,
       });
-      const aiCaller = createAgentdCaller({ client, gameId: game.game_id, pool: config.pool, lang: config.lang });
+      const aiCaller = createAgentdCaller({
+        client,
+        gameId: game.game_id,
+        pool: config.pool,
+        lang: config.lang,
+        ...(config.identities ? { identities: config.identities } : {}),
+      });
       const humanSeat = config.humanSeat;
       // For the human seat, don't call agentd — hand the projected SeatView to
       // the UI and await the human's submission (same Decision schema). All
@@ -98,6 +104,7 @@ export function useGameRunner() {
       };
       const lang = config.lang;
       const zh = lang === "zh";
+      const identities = config.identities;
       // Narrate ONLY public content (speeches, last words, deaths, banishes,
       // winner, day/night transitions) — never night actions or checks.
       const narrate = (text: string, seat?: number) => {
@@ -130,17 +137,18 @@ export function useGameRunner() {
           });
           const say = e.decision.say.trim();
           if (say && (e.phase === "day_discuss" || e.phase === "last_words")) {
-            const prefix = e.phase === "last_words" ? (zh ? `${e.seat}号遗言：` : `Seat ${e.seat}, last words: `) : zh ? `${e.seat}号：` : `Seat ${e.seat}: `;
+            const actor = actorName(e.seat, lang, identities);
+            const prefix = e.phase === "last_words" ? (zh ? `${actor}遗言：` : `${actor}, last words: `) : `${actor}: `;
             narrate(prefix + say, e.seat);
           }
         },
         onResolution: (e, g) => {
           setState((s) => ({ ...s, game: g }));
           for (const ev of e.events) {
-            const r = resolutionText(g, ev, lang);
+            const r = resolutionText(g, ev, lang, identities);
             if (r) push({ id: nextId(), kind: "resolution", day: e.day, phase: e.phase, text: r.text, tone: r.tone, event: ev });
-            if (ev.type === "night_kill" && ev.victim !== null) narrate(zh ? `昨夜，${ev.victim}号出局` : `Last night, seat ${ev.victim} died`);
-            else if (ev.type === "banish" && ev.victim !== null) narrate(zh ? `${ev.victim}号被放逐` : `Seat ${ev.victim} was banished`);
+            if (ev.type === "night_kill" && ev.victim !== null) narrate(zh ? `昨夜，${actorName(ev.victim, lang, identities)}出局` : `Last night, ${actorName(ev.victim, lang, identities)} died`);
+            else if (ev.type === "banish" && ev.victim !== null) narrate(zh ? `${actorName(ev.victim, lang, identities)}被放逐` : `${actorName(ev.victim, lang, identities)} was banished`);
             // seer_check is private — never narrated.
           }
         },

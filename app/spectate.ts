@@ -1,4 +1,5 @@
 import type { DeathPhase, Faction, GameState, Phase } from "@engine";
+import type { SeatIdentityMap } from "@orchestrator";
 import { publicResolutionText, type Lang } from "./i18n.js";
 import type { TimelineItem } from "./timeline.js";
 
@@ -43,7 +44,7 @@ export type PublicTimelineItem =
  *  - phase headers keep the label but NOT the acting-seat list (which would
  *    reveal who the seer/wolves are).
  */
-export function publicTimeline(items: TimelineItem[], lang: Lang): PublicTimelineItem[] {
+export function publicTimeline(items: TimelineItem[], lang: Lang, identities?: SeatIdentityMap): PublicTimelineItem[] {
   const out: PublicTimelineItem[] = [];
   for (const it of items) {
     switch (it.kind) {
@@ -62,7 +63,7 @@ export function publicTimeline(items: TimelineItem[], lang: Lang): PublicTimelin
         break;
       }
       case "resolution": {
-        const r = publicResolutionText(it.event, lang);
+        const r = publicResolutionText(it.event, lang, identities);
         if (r) out.push({ id: it.id, kind: "resolution", text: r.text, tone: r.tone });
         break;
       }

@@ -1,4 +1,5 @@
 import type { Action, Faction, GameState, Phase, ResolutionEvent, Role } from "@engine";
+import type { SeatIdentityMap } from "@orchestrator";
 
 export type Lang = "zh" | "en";
 
@@ -36,7 +37,7 @@ export const UI = {
   zh: {
     title: "🐺 Nightfall — AI 狼人杀观赛",
     subtitle:
-      "浏览器即裁判:持有全量状态、按阶段 FSM 推进,并以每个座位的「投影视图」调用 agentd。本页渲染上帝视角——两者从不混淆。",
+      "浏览器即裁判:持有全量状态、按阶段 FSM 推进,并以每位角色的「投影视图」调用 agentd。本页渲染上帝视角——两者从不混淆。",
     cfgLegend: "③ 开局配置",
     baseUrl: "agentd 地址",
     tenant: "租户 tenant",
@@ -52,13 +53,13 @@ export const UI = {
     stepTip: "暂停并只推进一步",
     stop: "⏹ 停止",
     status: "状态",
-    seats: "座位",
+    seats: "玩家",
     noGame: "暂无对局。",
     diedPrefix: "死亡",
     timeline: "时间线",
     startHint: "点「开始」对着 agentd 跑一局。",
     acting: "行动",
-    seat: "座位",
+    seat: "玩家",
     fallback: "降级",
     dayWord: "第",
     dayUnit: "天",
@@ -72,7 +73,7 @@ export const UI = {
     reveal: "🎭 揭晓真实身份",
     hideReveal: "收起",
     revealTitle: "身份揭晓",
-    humanSeatLabel: "本地玩家座位",
+    humanSeatLabel: "空替换角色",
     humanNone: "无(全 AI)",
     yourTurn: "轮到你了",
     youAre: "你的身份",
@@ -82,7 +83,7 @@ export const UI = {
     skipDefault: "跳过(默认)",
     speakPlaceholder: "输入你的公开发言…",
     reasonPlaceholder: "私有思考(可空,别人看不到)",
-    pickTarget: "选择目标座位",
+    pickTarget: "选择目标",
     abstainBtn: "弃票",
     waitingHuman: "等待你输入…",
     teammatesLabel: "你的狼队友",
@@ -96,7 +97,7 @@ export const UI = {
     votesUnit: "票",
     mvpNoVotes: "没有有效票(模型未返回可用结果)",
     recapEvents: "逐回合复盘",
-    yourBallot: "你的一票(座位",
+    yourBallot: "你的一票:",
     yourBest: "最佳",
     yourWorst: "最差",
     yourTake: "你的点评(可空)",
@@ -106,7 +107,7 @@ export const UI = {
   en: {
     title: "🐺 Nightfall — AI Werewolf spectator",
     subtitle:
-      "Browser is the referee: it holds full state, runs the phase FSM, and calls agentd with each seat's projected view. This page renders the god view — the two never mix.",
+      "Browser is the referee: it holds full state, runs the phase FSM, and calls agentd with each character's projected view. This page renders the god view — the two never mix.",
     cfgLegend: "③ Game setup",
     baseUrl: "agentd baseUrl",
     tenant: "tenant",
@@ -122,13 +123,13 @@ export const UI = {
     stepTip: "Pause and advance one step",
     stop: "⏹ Stop",
     status: "status",
-    seats: "Seats",
+    seats: "Players",
     noGame: "No game yet.",
     diedPrefix: "died",
     timeline: "Timeline",
     startHint: "Press Start to run a game against agentd.",
     acting: "acting",
-    seat: "Seat",
+    seat: "Player",
     fallback: "fallback",
     dayWord: "Day",
     dayUnit: "",
@@ -142,7 +143,7 @@ export const UI = {
     reveal: "🎭 Reveal roles",
     hideReveal: "Hide",
     revealTitle: "Roles revealed",
-    humanSeatLabel: "Local player seat",
+    humanSeatLabel: "Aether replaces",
     humanNone: "None (all AI)",
     yourTurn: "Your turn",
     youAre: "You are",
@@ -152,7 +153,7 @@ export const UI = {
     skipDefault: "Skip (default)",
     speakPlaceholder: "Your public statement…",
     reasonPlaceholder: "Private note (optional, hidden from others)",
-    pickTarget: "Pick a target seat",
+    pickTarget: "Pick a target",
     abstainBtn: "Abstain",
     waitingHuman: "Waiting for your input…",
     teammatesLabel: "Your wolf teammates",
@@ -166,7 +167,7 @@ export const UI = {
     votesUnit: "votes",
     mvpNoVotes: "No valid votes (the model returned nothing usable)",
     recapEvents: "Round-by-round recap",
-    yourBallot: "Your ballot (seat",
+    yourBallot: "Your ballot:",
     yourBest: "Best",
     yourWorst: "Worst",
     yourTake: "Your take (optional)",
@@ -175,11 +176,18 @@ export const UI = {
   },
 } as const;
 
+export function actorName(seat: number, lang: Lang, identities?: SeatIdentityMap): string {
+  const identity = identities?.[seat];
+  if (!identity) return `${seat}`;
+  return lang === "zh" ? identity.zh : identity.en;
+}
+
 const roleOf = (game: GameState, seat: number): Role | null => game.seats.find((s) => s.seat === seat)?.role ?? null;
 /** "3(狼)" / "3(wolf)" — god-view seat tag. */
-export function tag(game: GameState, seat: number, lang: Lang): string {
+export function tag(game: GameState, seat: number, lang: Lang, identities?: SeatIdentityMap): string {
   const r = roleOf(game, seat);
-  return r ? `${seat}(${ROLE_NAME[lang][r]})` : `${seat}`;
+  const name = actorName(seat, lang, identities);
+  return r ? `${name}(${ROLE_NAME[lang][r]})` : name;
 }
 
 /** Localized resolution line for the god-view timeline. null = not shown. */
@@ -187,26 +195,30 @@ export function resolutionText(
   game: GameState,
   e: ResolutionEvent,
   lang: Lang,
+  identities?: SeatIdentityMap,
 ): { text: string; tone: "kill" | "info" | "safe" } | null {
   const zh = lang === "zh";
+  const name = (seat: number) => actorName(seat, lang, identities);
+  const tallyText = (tally: Record<number, number>) =>
+    Object.entries(tally).map(([s, n]) => `${name(Number(s))}:${n}`).join("  ") || "—";
   switch (e.type) {
     case "seer_check":
       return {
         tone: "info",
         text: zh
-          ? `🔮 预言家 ${tag(game, e.seat, lang)} 查验 ${tag(game, e.target, lang)} → ${e.result === "wolf" ? "狼" : "好人"}`
-          : `🔮 Seer ${tag(game, e.seat, lang)} checked ${tag(game, e.target, lang)} → ${e.result.toUpperCase()}`,
+          ? `🔮 预言家 ${tag(game, e.seat, lang, identities)} 查验 ${tag(game, e.target, lang, identities)} → ${e.result === "wolf" ? "狼" : "好人"}`
+          : `🔮 Seer ${tag(game, e.seat, lang, identities)} checked ${tag(game, e.target, lang, identities)} → ${e.result.toUpperCase()}`,
       };
     case "night_kill":
       if (e.victim === null) return { tone: "safe", text: zh ? "🌙 今夜无人死亡" : "🌙 No one was killed" };
       return {
         tone: "kill",
         text: zh
-          ? `🔪 狼人刀了 ${tag(game, e.victim, lang)}${e.tie ? "(平票→按种子)" : ""}`
-          : `🔪 Wolves killed seat ${tag(game, e.victim, lang)}${e.tie ? " (tie → seeded)" : ""}`,
+          ? `🔪 狼人刀了 ${tag(game, e.victim, lang, identities)}${e.tie ? "(平票→按种子)" : ""}`
+          : `🔪 Wolves killed ${tag(game, e.victim, lang, identities)}${e.tie ? " (tie → seeded)" : ""}`,
       };
     case "banish": {
-      const tally = Object.entries(e.tally).map(([s, n]) => `${s}:${n}`).join("  ") || "—";
+      const tally = tallyText(e.tally);
       if (e.victim === null)
         return {
           tone: "safe",
@@ -217,8 +229,8 @@ export function resolutionText(
       return {
         tone: "kill",
         text: zh
-          ? `⚖️ 放逐了 ${tag(game, e.victim, lang)} · 票数 ${tally} · 弃票 ${e.abstains}${e.tie ? "(平票→按种子)" : ""}`
-          : `⚖️ Banished seat ${tag(game, e.victim, lang)} · votes ${tally} · abstain ${e.abstains}${e.tie ? " (tie → seeded)" : ""}`,
+          ? `⚖️ 放逐了 ${tag(game, e.victim, lang, identities)} · 票数 ${tally} · 弃票 ${e.abstains}${e.tie ? "(平票→按种子)" : ""}`
+          : `⚖️ Banished ${tag(game, e.victim, lang, identities)} · votes ${tally} · abstain ${e.abstains}${e.tie ? " (tie → seeded)" : ""}`,
       };
     }
     case "death":
@@ -234,24 +246,28 @@ export function winnerText(winner: Faction, lang: Lang): string {
 }
 
 /**
- * PUBLIC resolution text for spectator mode — uses seat numbers only, NEVER a
- * role. Seer checks are dropped entirely (private), and night-kill proposals
- * (which would expose the wolves) are never included.
+ * PUBLIC resolution text for spectator mode — uses public player labels only,
+ * NEVER a role. Seer checks are dropped entirely (private), and night-kill
+ * proposals (which would expose the wolves) are never included.
  */
 export function publicResolutionText(
   e: ResolutionEvent,
   lang: Lang,
+  identities?: SeatIdentityMap,
 ): { text: string; tone: "kill" | "info" | "safe" } | null {
   const zh = lang === "zh";
+  const name = (seat: number) => actorName(seat, lang, identities);
+  const tallyText = (tally: Record<number, number>) =>
+    Object.entries(tally).map(([s, n]) => `${name(Number(s))}:${n}`).join("  ") || "—";
   switch (e.type) {
     case "seer_check":
       return null; // private — spectators never see who checked whom
     case "night_kill":
       return e.victim === null
         ? { tone: "safe", text: zh ? "🌙 昨夜无人死亡" : "🌙 No one died last night" }
-        : { tone: "kill", text: zh ? `🔪 昨夜 座位 ${e.victim} 出局` : `🔪 Seat ${e.victim} was killed last night` };
+        : { tone: "kill", text: zh ? `🔪 昨夜 ${name(e.victim)} 出局` : `🔪 ${name(e.victim)} was killed last night` };
     case "banish": {
-      const tally = Object.entries(e.tally).map(([s, n]) => `${s}:${n}`).join("  ") || "—";
+      const tally = tallyText(e.tally);
       return e.victim === null
         ? {
             tone: "safe",
@@ -259,7 +275,7 @@ export function publicResolutionText(
           }
         : {
             tone: "kill",
-            text: zh ? `⚖️ 放逐 座位 ${e.victim} · 票数 ${tally} · 弃票 ${e.abstains}` : `⚖️ Banished seat ${e.victim} · votes ${tally} · abstain ${e.abstains}`,
+            text: zh ? `⚖️ 放逐 ${name(e.victim)} · 票数 ${tally} · 弃票 ${e.abstains}` : `⚖️ Banished ${name(e.victim)} · votes ${tally} · abstain ${e.abstains}`,
           };
     }
     case "death":
@@ -285,23 +301,23 @@ export const SETTINGS = {
     unauthorized: "✗ 鉴权失败:token 错误或缺失(agentd 开了鉴权)",
     http: (s: string) => `✗ 服务返回错误:${s}`,
     network: (m: string) => `✗ 连不上:${m}(地址对吗?agentd 在跑吗?)`,
-    seatsLegend: "② 初始化座位",
-    seatsIntro: "把三个座位 agent(预言家/平民/狼)注册到该租户。人设由 Nightfall 内置,一键写入 agentd。",
-    modelsTitle: "每座位模型",
+    seatsLegend: "② 初始化角色 agent",
+    seatsIntro: "把三个角色 agent(预言家/平民/狼)注册到该租户。人设由 Nightfall 内置,一键写入 agentd。",
+    modelsTitle: "每角色模型",
     defaultModel: "默认模型",
     applyAll: "应用到全部",
     modelHint: "下拉选或手填任意 model id;改完点「重新初始化」生效",
     runningModel: (m: string) => `生效:${m}`,
-    initSeats: "初始化座位",
+    initSeats: "初始化 agent",
     reinitSeats: "重新初始化",
     initializing: "注册中…",
     refresh: "刷新列表",
-    registered: "已注册座位",
-    none: "(该租户下还没有座位 agent,点上面初始化)",
+    registered: "已注册角色 agent",
+    none: "(该租户下还没有角色 agent,点上面初始化)",
     del: "删除",
     seatOk: (n: string) => `✓ ${n}`,
     seatErr: (n: string, e: string) => `✗ ${n}:${e}`,
-    ready: "座位就绪,可以到下方开一局了 ↓",
+    ready: "角色 agent 就绪,可以到下方开一局了 ↓",
   },
   en: {
     legend: "① Connect agentd",
@@ -317,22 +333,22 @@ export const SETTINGS = {
     unauthorized: "✗ Unauthorized: token wrong or missing (agentd has auth on)",
     http: (s: string) => `✗ Server error: ${s}`,
     network: (m: string) => `✗ Unreachable: ${m} (right URL? is agentd running?)`,
-    seatsLegend: "② Initialize seats",
-    seatsIntro: "Register the three seat agents (seer/villager/wolf) into this tenant. Personas are built into Nightfall; one click writes them to agentd.",
-    modelsTitle: "Per-seat model",
+    seatsLegend: "② Initialize character agents",
+    seatsIntro: "Register the three character agents (seer/villager/wolf) into this tenant. Personas are built into Nightfall; one click writes them to agentd.",
+    modelsTitle: "Per-character model",
     defaultModel: "Default model",
     applyAll: "Apply to all",
     modelHint: "Pick from the list or type any model id; click Re-initialize to apply",
     runningModel: (m: string) => `live: ${m}`,
-    initSeats: "Initialize seats",
+    initSeats: "Initialize agents",
     reinitSeats: "Re-initialize",
     initializing: "Registering…",
     refresh: "Refresh list",
-    registered: "Registered seats",
-    none: "(no seat agents in this tenant yet — initialize above)",
+    registered: "Registered character agents",
+    none: "(no character agents in this tenant yet — initialize above)",
     del: "Delete",
     seatOk: (n: string) => `✓ ${n}`,
     seatErr: (n: string, e: string) => `✗ ${n}: ${e}`,
-    ready: "Seats ready — start a game below ↓",
+    ready: "Character agents ready — start a game below ↓",
   },
 } as const;

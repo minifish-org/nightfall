@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { AgentdClient } from "@agentd";
 import type { GameState, Role } from "@engine";
+import type { SeatIdentityMap } from "@orchestrator";
+import { characterForSeat, characterLabel, characterName } from "./characters.js";
 import { ROLE_NAME, UI, winnerText, type Lang } from "./i18n.js";
 import type { ConnectionSettings } from "./settings.js";
 import { buildRecap, seatFate, tallyVotes, voteMvp, type MvpResult } from "./summary.js";
@@ -8,11 +10,12 @@ import type { TimelineItem } from "./timeline.js";
 
 const ROLE_EMOJI: Record<Role, string> = { wolf: "🐺", seer: "🔮", villager: "🧑‍🌾" };
 
-function tallyLine(tally: { seat: number; count: number }[], seatWord: string, unit: string): string {
+function tallyLine(tally: { seat: number; count: number }[], seatWord: string, unit: string, lang: Lang, identities?: SeatIdentityMap): string {
   if (tally.length === 0) return "—";
   const top = tally[0]!;
-  const rest = tally.slice(1).map((x) => `${x.seat}:${x.count}`).join("  ");
-  return `${seatWord} ${top.seat} (${top.count} ${unit})${rest ? "  ·  " + rest : ""}`;
+  const name = (seat: number) => (identities ? characterLabel(identities, seat, lang) : `${seatWord} ${seat}`);
+  const rest = tally.slice(1).map((x) => `${name(x.seat)}:${x.count}`).join("  ");
+  return `${name(top.seat)} (${top.count} ${unit})${rest ? "  ·  " + rest : ""}`;
 }
 
 /**
@@ -26,6 +29,7 @@ export function SummaryPanel({
   connection,
   showRoles,
   humanSeat,
+  identities,
 }: {
   lang: Lang;
   game: GameState;
@@ -33,6 +37,7 @@ export function SummaryPanel({
   connection: ConnectionSettings;
   showRoles: boolean;
   humanSeat: number | null;
+  identities: SeatIdentityMap;
 }) {
   const t = UI[lang];
   const [result, setResult] = useState<MvpResult | null>(null);
@@ -40,7 +45,7 @@ export function SummaryPanel({
   const [hBest, setHBest] = useState<number | null>(null);
   const [hWorst, setHWorst] = useState<number | null>(null);
   const [hReason, setHReason] = useState("");
-  const recap = buildRecap(timeline, lang);
+  const recap = buildRecap(timeline, lang, identities);
   const seatNums = game.seats.map((s) => s.seat);
   const humanReady = humanSeat === null || (hBest !== null && hWorst !== null);
 
@@ -49,7 +54,7 @@ export function SummaryPanel({
     setResult(null);
     try {
       const client = new AgentdClient({ baseUrl: connection.baseUrl, tenant: connection.tenant, token: connection.token });
-      const aiVotes = await voteMvp(client, game, timeline, lang, humanSeat);
+      const aiVotes = await voteMvp(client, game, timeline, lang, humanSeat, identities);
       const votes = [...aiVotes];
       // The local human casts their OWN ballot — never the AI on their behalf.
       if (humanSeat !== null && hBest !== null && hWorst !== null) {
@@ -67,7 +72,7 @@ export function SummaryPanel({
       <span style={{ fontSize: 13, width: 36 }}>{label}</span>
       {seatNums.map((n) => (
         <button key={n} className={picked === n ? "nf-toggle is-on" : "nf-toggle"} onClick={() => onPick(n)}>
-          {n}
+          {characterLabel(identities, n, lang)}
         </button>
       ))}
     </div>
@@ -83,7 +88,7 @@ export function SummaryPanel({
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 4, fontSize: 13, margin: "6px 0" }}>
         {game.seats.map((s) => (
           <div key={s.seat} style={{ opacity: s.alive ? 1 : 0.6 }}>
-            {showRoles ? ROLE_EMOJI[s.role] : "👤"} {t.seat} {s.seat}
+            {showRoles ? ROLE_EMOJI[s.role] : "👤"} {characterName(characterForSeat(identities, s.seat), lang)}
             {showRoles ? ` · ${ROLE_NAME[lang][s.role]}` : ""} · {seatFate(game, s.seat, lang)}
           </div>
         ))}
@@ -93,7 +98,7 @@ export function SummaryPanel({
       {humanSeat !== null && (
         <div style={{ border: "1px dashed var(--good)", borderRadius: 6, padding: "6px 8px", margin: "6px 0", background: "rgba(90,166,239,0.08)" }}>
           <div style={{ fontWeight: 600, fontSize: 13 }}>
-            🙋 {t.yourBallot} {humanSeat})
+            🙋 {t.yourBallot} {characterLabel(identities, humanSeat, lang)}
           </div>
           <SeatRow label={`🏆${t.yourBest}`} picked={hBest} onPick={setHBest} />
           <SeatRow label={`💩${t.yourWorst}`} picked={hWorst} onPick={setHWorst} />
@@ -117,16 +122,16 @@ export function SummaryPanel({
           ) : (
             <div style={{ margin: "6px 0" }}>
               <div style={{ fontWeight: 600 }}>
-                {t.bestLabel}: {tallyLine(result.bestTally, t.seat, t.votesUnit)}
+                {t.bestLabel}: {tallyLine(result.bestTally, t.seat, t.votesUnit, lang, identities)}
               </div>
               <div style={{ fontWeight: 600 }}>
-                {t.worstLabel}: {tallyLine(result.worstTally, t.seat, t.votesUnit)}
+                {t.worstLabel}: {tallyLine(result.worstTally, t.seat, t.votesUnit, lang, identities)}
               </div>
               <ul style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0" }}>
                 {result.votes.map((v) => (
                   <li key={v.voter} style={v.human ? { fontWeight: 600 } : undefined}>
-                    {t.seat} {v.voter}
-                    {v.human ? ` ${t.youTag}` : ""} → 🏆{v.best} 💩{v.worst}
+                    {characterLabel(identities, v.voter, lang)}
+                    {v.human ? ` ${t.youTag}` : ""} → 🏆{characterLabel(identities, v.best, lang)} 💩{characterLabel(identities, v.worst, lang)}
                     {v.reason ? ` · ${v.reason}` : ""}
                   </li>
                 ))}

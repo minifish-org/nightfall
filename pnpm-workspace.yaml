@@ -3,3 +3,5 @@
 # packages (and reused inside a Cloudflare Durable Object) without rewrites.
 packages:
   - "."
+allowBuilds:
+  esbuild: true

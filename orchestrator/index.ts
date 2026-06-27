@@ -6,6 +6,8 @@
 export { runGame } from "./run.js";
 export { createAgentdCaller } from "./agentd-caller.js";
 export type { AgentdCallerConfig } from "./agentd-caller.js";
+export { toCharacterView, resolveCharacterTarget } from "./identity-view.js";
+export type { CharacterIdentity, CharacterSeatView, SeatIdentityMap } from "./identity-view.js";
 export type {
   AgentCaller,
   AgentRequest,

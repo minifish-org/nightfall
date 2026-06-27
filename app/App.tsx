@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fallbackDecision, viewFor } from "@engine";
 import { DEFAULT_CONFIG, type SpectatorConfig } from "./config.js";
+import type { SeatIdentityMap } from "@orchestrator";
 import { Controls, ConfigForm, Timeline } from "./components.js";
 import { Settings } from "./SettingsPanel.js";
 import { SpectatorTimeline } from "./SpectatorView.js";
@@ -9,6 +10,7 @@ import { PhaseBanner } from "./PhaseBanner.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { HumanPanel, HumanInfo } from "./HumanPanel.js";
 import { UI, type Lang } from "./i18n.js";
+import { characterForSeat, characterLabel, characterMapForHuman, characterName } from "./characters.js";
 import { ttsSupported } from "./tts.js";
 import { publicTimeline, type PublicTimelineItem, type ViewMode } from "./spectate.js";
 import { loadConnection, saveConnection, type ConnectionSettings } from "./settings.js";
@@ -19,22 +21,22 @@ const randomSeed = () => Math.floor(Math.random() * 1_000_000_000);
 
 type Focus = { seat: number | null; bubble: { seat: number; text: string } | null };
 
-/** A vote rendered as a short bubble, e.g. "🗳️ → 3号" / "🗳️ 弃票". */
-function voteBubble(target: number | null, lang: Lang): string {
+/** A vote rendered as a short bubble, e.g. "🗳️ → 纳西妲" / "🗳️ 弃票". */
+function voteBubble(target: number | null, lang: Lang, identities: SeatIdentityMap): string {
   if (target === null) return `🗳️ ${UI[lang].abstainBtn}`;
-  return lang === "zh" ? `🗳️ → ${target}号` : `🗳️ → #${target}`;
+  return `🗳️ → ${characterLabel(identities, target, lang)}`;
 }
 
 /** Most recent actor (+ bubble) in the CURRENT phase, god timeline. Speeches and
  *  last words bubble their `say`; votes bubble who they voted for. */
-function godFocus(items: TimelineItem[], lang: Lang): Focus {
+function godFocus(items: TimelineItem[], lang: Lang, identities: SeatIdentityMap): Focus {
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i]!;
     if (it.kind === "decision") {
       const say = it.say.trim();
       let bubble: Focus["bubble"] = null;
       if ((it.phase === "day_discuss" || it.phase === "last_words") && say) bubble = { seat: it.seat, text: say };
-      else if (it.phase === "day_vote") bubble = { seat: it.seat, text: voteBubble(it.action === "vote" ? it.target : null, lang) };
+      else if (it.phase === "day_vote") bubble = { seat: it.seat, text: voteBubble(it.action === "vote" ? it.target : null, lang, identities) };
       return { seat: it.seat, bubble };
     }
     if (it.kind === "phase" || it.kind === "gameover") break;
@@ -43,11 +45,11 @@ function godFocus(items: TimelineItem[], lang: Lang): Focus {
 }
 
 /** Same, but from the public (spectator) timeline — no night actions exist here. */
-function pubFocus(items: PublicTimelineItem[], lang: Lang): Focus {
+function pubFocus(items: PublicTimelineItem[], lang: Lang, identities: SeatIdentityMap): Focus {
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i]!;
     if (it.kind === "speech") return { seat: it.seat, bubble: { seat: it.seat, text: it.say } };
-    if (it.kind === "vote") return { seat: it.seat, bubble: { seat: it.seat, text: voteBubble(it.target, lang) } };
+    if (it.kind === "vote") return { seat: it.seat, bubble: { seat: it.seat, text: voteBubble(it.target, lang, identities) } };
     if (it.kind === "phase" || it.kind === "gameover") break;
   }
   return { seat: null, bubble: null };
@@ -61,6 +63,7 @@ export function App() {
   const [ttsOn, setTtsOn] = useState(false);
   const runner = useGameRunner();
   const t = UI[config.lang];
+  const identities = useMemo(() => characterMapForHuman(config.humanSeat), [config.humanSeat]);
 
   // Keep the runner's live TTS flag in sync with the toggle.
   const { setTts } = runner;
@@ -87,7 +90,7 @@ export function App() {
     }
     seedEditedRef.current = false;
     setRevealed(false);
-    runner.start({ ...config, seed }, connection);
+    runner.start({ ...config, seed, identities }, connection);
   };
 
   const playing = runner.status === "running" || runner.status === "paused";
@@ -102,11 +105,11 @@ export function App() {
   // Roles only surface in god mode, or after the spectator clicks reveal (which
   // is only available once the game is over) — so spectator play never leaks them.
   const showRoles = mode === "god" || revealed;
-  const pubItems = game && mode === "spectator" ? publicTimeline(runner.timeline, lang) : null;
+  const pubItems = game && mode === "spectator" ? publicTimeline(runner.timeline, lang, identities) : null;
 
   let focus: Focus = { seat: null, bubble: null };
   if (game && !runner.winner) {
-    focus = mode === "god" ? godFocus(runner.timeline, lang) : pubFocus(pubItems ?? [], lang);
+    focus = mode === "god" ? godFocus(runner.timeline, lang, identities) : pubFocus(pubItems ?? [], lang, identities);
     // While it's the human's turn, spotlight them (their decision isn't logged yet).
     if (pending) focus = { seat: pending.seat, bubble: null };
   }
@@ -118,6 +121,7 @@ export function App() {
         diedPhase: s.diedPhase,
         diedDay: s.diedDay,
         isHuman: s.seat === config.humanSeat,
+        character: characterForSeat(identities, s.seat),
         ...(showRoles ? { role: s.role } : {}),
       }))
     : [];
@@ -188,6 +192,7 @@ export function App() {
             connection={connection}
             showRoles={showRoles}
             humanSeat={config.humanSeat}
+            identities={identities}
           />
         </>
       )}
@@ -196,9 +201,9 @@ export function App() {
       {humanView && !pending && (
         <div className="nf-panel" style={{ padding: "8px 12px", margin: "6px 0", borderColor: "var(--good)" }}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>
-            🪪 {t.myPanelTitle} — {t.seat} {config.humanSeat}
+            🪪 {t.myPanelTitle} — {characterName(characterForSeat(identities, humanView.you.seat), lang)}
           </div>
-          <HumanInfo view={humanView} lang={lang} />
+          <HumanInfo view={humanView} lang={lang} identities={identities} />
         </div>
       )}
 
@@ -208,6 +213,7 @@ export function App() {
           key={`${pending.day}:${pending.phase}:${pending.seat}`}
           req={pending}
           lang={lang}
+          identities={identities}
           onSubmit={runner.submitHuman}
           onSkip={() => runner.submitHuman(fallbackDecision(pending.phase))}
         />
@@ -234,9 +240,9 @@ export function App() {
           {runner.timeline.length === 0 ? (
             <p style={{ color: "var(--text-faint)" }}>{t.startHint}</p>
           ) : mode === "god" ? (
-            <Timeline lang={lang} items={runner.timeline} />
+            <Timeline lang={lang} items={runner.timeline} identities={identities} />
           ) : (
-            <SpectatorTimeline lang={lang} items={pubItems ?? []} />
+            <SpectatorTimeline lang={lang} items={pubItems ?? []} identities={identities} />
           )}
         </section>
       </div>

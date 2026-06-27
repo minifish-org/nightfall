@@ -19,6 +19,6 @@ export default defineConfig({
     globals: true,
     // The engine and agentd-client are pure modules with no DOM dependency.
     environment: "node",
-    include: ["engine/**/*.test.ts", "agentd-client/**/*.test.ts", "orchestrator/**/*.test.ts"],
+    include: ["engine/**/*.test.ts", "agentd-client/**/*.test.ts", "orchestrator/**/*.test.ts", "app/**/*.test.ts"],
   },
 });
