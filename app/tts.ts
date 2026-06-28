@@ -3,6 +3,12 @@ import { DEFAULT_TTS_SETTINGS, type TtsSettings } from "./tts-settings.js";
 import { kokoroVoiceForCharacterId, type KokoroVoice } from "./voiceProfiles.js";
 
 export const TAILGATE_TTS_REQUEST_TIMEOUT_MS = 45_000;
+export const TAILGATE_TTS_TEST_TIMEOUT_MS = 15_000;
+
+export type TailgateTtsTestResult = { ok: true; bytes: number } | { ok: false; message: string };
+export interface TailgateTtsTestOptions {
+  playAudio?: (blob: Blob) => Promise<void>;
+}
 
 let cachedVoices: SpeechSynthesisVoice[] = [];
 let speechQueue: Promise<void> = Promise.resolve();
@@ -63,6 +69,35 @@ export function buildTailgateTtsRequest(
       }),
     },
   };
+}
+
+export async function testTailgateTts(settings: TtsSettings, lang: Lang, options: TailgateTtsTestOptions = {}): Promise<TailgateTtsTestResult> {
+  if (!tailgateConfigured(settings)) return { ok: false, message: "service URL is required" };
+  if (typeof fetch !== "function") return { ok: false, message: "fetch is not available" };
+
+  const text = lang === "zh" ? "本地 Kokoro 朗读测试。" : "Local Kokoro narration test.";
+  const voice = kokoroVoiceForCharacterId("narrator", lang);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TAILGATE_TTS_TEST_TIMEOUT_MS);
+
+  try {
+    const req = buildTailgateTtsRequest(settings, text, voice);
+    const response = await fetch(req.url, { ...req.init, signal: controller.signal });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      return { ok: false, message: body ? `HTTP ${response.status}: ${body}` : `HTTP ${response.status}` };
+    }
+
+    const audio = await response.blob();
+    if (audio.size <= 0) return { ok: false, message: "empty audio response" };
+    await (options.playAudio ?? playAudioBlob)(audio);
+    return { ok: true, bytes: audio.size };
+  } catch (error) {
+    const message = error instanceof Error && error.name === "AbortError" ? "request timed out" : error instanceof Error ? error.message : String(error);
+    return { ok: false, message };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export interface SpeakOptions {

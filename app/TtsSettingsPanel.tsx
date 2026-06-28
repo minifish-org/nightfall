@@ -1,4 +1,6 @@
+import { useCallback, useState } from "react";
 import type { Lang } from "./i18n.js";
+import { testTailgateTts, type TailgateTtsTestResult } from "./tts.js";
 import type { TtsResponseFormat, TtsSettings } from "./tts-settings.js";
 
 const COPY = {
@@ -11,6 +13,11 @@ const COPY = {
     token: "API Token",
     model: "模型",
     format: "格式",
+    test: "测试",
+    testing: "测试中…",
+    testTitle: "验证当前 Kokoro 配置",
+    testOk: (bytes: number) => `✓ 可用 · ${bytes} bytes`,
+    testFail: (message: string) => `✗ ${message}`,
     hint: "通过 tailgate 调用本地 TTS；token 只保存在本机浏览器。",
   },
   en: {
@@ -22,11 +29,17 @@ const COPY = {
     token: "API Token",
     model: "Model",
     format: "Format",
+    test: "Test",
+    testing: "Testing…",
+    testTitle: "Verify current Kokoro settings",
+    testOk: (bytes: number) => `✓ Available · ${bytes} bytes`,
+    testFail: (message: string) => `✗ ${message}`,
     hint: "Calls local TTS through tailgate. The token is stored only in this browser.",
   },
 } as const;
 
 const FORMATS: TtsResponseFormat[] = ["mp3", "wav", "opus", "webm", "aac"];
+const TAILGATE_URL_PLACEHOLDER = "http://tailgate.example:11435";
 
 export function TtsSettingsPanel({
   settings,
@@ -38,7 +51,21 @@ export function TtsSettingsPanel({
   lang: Lang;
 }) {
   const t = COPY[lang];
-  const set = <K extends keyof TtsSettings>(key: K, value: TtsSettings[K]) => onChange({ ...settings, [key]: value });
+  const [test, setTest] = useState<TailgateTtsTestResult | null>(null);
+  const [testing, setTesting] = useState(false);
+  const set = <K extends keyof TtsSettings>(key: K, value: TtsSettings[K]) => {
+    setTest(null);
+    onChange({ ...settings, [key]: value });
+  };
+  const doTest = useCallback(async () => {
+    setTesting(true);
+    setTest(null);
+    setTest(await testTailgateTts(settings, lang));
+    setTesting(false);
+  }, [settings, lang]);
+  const statusText = !test ? "" : test.ok ? t.testOk(test.bytes) : t.testFail(test.message);
+  const statusColor = !test ? "#888" : test.ok ? "var(--safe)" : "var(--blood)";
+
   return (
     <fieldset style={{ border: "1px solid #ccc", borderRadius: 8, padding: 12, marginBottom: 12 }}>
       <legend>{t.legend}</legend>
@@ -54,7 +81,7 @@ export function TtsSettingsPanel({
             <input
               value={settings.baseUrl}
               onChange={(event) => set("baseUrl", event.target.value)}
-              placeholder="http://ip-...ts.net:11435"
+              placeholder={TAILGATE_URL_PLACEHOLDER}
             />
             <label>{t.token}</label>
             <input type="password" value={settings.token} onChange={(event) => set("token", event.target.value)} autoComplete="off" />
@@ -68,6 +95,12 @@ export function TtsSettingsPanel({
                 </option>
               ))}
             </select>
+            <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button type="button" onClick={() => void doTest()} disabled={testing || !settings.baseUrl.trim()} title={t.testTitle}>
+                {testing ? t.testing : t.test}
+              </button>
+              {statusText && <span style={{ color: statusColor, fontSize: 12 }}>{statusText}</span>}
+            </div>
           </>
         )}
       </div>
