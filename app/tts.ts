@@ -1,78 +1,184 @@
 import type { Lang } from "./i18n.js";
+import { DEFAULT_TTS_SETTINGS, type TtsSettings } from "./tts-settings.js";
+import { kokoroVoiceForCharacterId, type KokoroVoice } from "./voiceProfiles.js";
 
-/**
- * Experimental text-to-speech via the browser's built-in Web Speech API
- * (`speechSynthesis`). Zero deps, free, offline, no backend — fits the
- * referee-in-browser / static-Pages architecture. Voice quality depends on the
- * OS/browser's installed voices. The TTS layer is isolated here so it can later
- * be swapped for a cloud TTS without touching game logic.
- */
+export const TAILGATE_TTS_REQUEST_TIMEOUT_MS = 45_000;
 
 let cachedVoices: SpeechSynthesisVoice[] = [];
-function loadVoices(): SpeechSynthesisVoice[] {
-  if (!ttsSupported()) return [];
-  const v = window.speechSynthesis.getVoices();
-  if (v.length) cachedVoices = v;
-  return cachedVoices;
-}
+let speechQueue: Promise<void> = Promise.resolve();
+let speechGeneration = 0;
+let activeController: AbortController | null = null;
+let currentAudio: HTMLAudioElement | null = null;
 
-export function ttsSupported(): boolean {
+function browserTtsSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-if (ttsSupported()) {
+function loadVoices(): SpeechSynthesisVoice[] {
+  if (!browserTtsSupported()) return [];
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length) cachedVoices = voices;
+  return cachedVoices;
+}
+
+if (browserTtsSupported()) {
   loadVoices();
-  // Voices often load asynchronously.
   window.speechSynthesis.onvoiceschanged = () => loadVoices();
 }
 
 function voicesFor(lang: Lang): SpeechSynthesisVoice[] {
   const all = loadVoices();
   const pref = lang === "zh" ? /^zh/i : /^en/i;
-  const matched = all.filter((v) => pref.test(v.lang));
+  const matched = all.filter((voice) => pref.test(voice.lang));
   return matched.length ? matched : all;
 }
 
-// Per-seat pitch so distinct seats sound distinct even with one system voice.
 const SEAT_PITCH = [1.0, 1.28, 0.82, 1.12, 0.92, 1.4];
 
-/**
- * Speak `text`. With a `seat`, picks a per-seat voice + pitch (a "player"
- * voice); without, uses a neutral narrator voice. Utterances queue FIFO.
- */
-export function speak(text: string, lang: Lang, seat?: number): void {
-  if (!ttsSupported() || !text.trim()) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = lang === "zh" ? "zh-CN" : "en-US";
-  const vs = voicesFor(lang);
-  if (seat != null) {
-    if (vs.length) u.voice = vs[(seat - 1) % vs.length] ?? null;
-    u.pitch = SEAT_PITCH[(seat - 1) % SEAT_PITCH.length] ?? 1;
-    u.rate = 1.08;
-  } else {
-    if (vs.length) u.voice = vs[0] ?? null;
-    u.pitch = 1;
-    u.rate = 1;
+function tailgateConfigured(settings: TtsSettings): boolean {
+  return settings.provider === "tailgate" && settings.baseUrl.trim().length > 0;
+}
+
+export function ttsSupported(settings: TtsSettings = DEFAULT_TTS_SETTINGS): boolean {
+  return tailgateConfigured(settings) || browserTtsSupported();
+}
+
+export function buildTailgateTtsRequest(
+  settings: TtsSettings,
+  input: string,
+  voice: KokoroVoice,
+): { url: string; init: RequestInit } {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (settings.token.trim()) headers.Authorization = `Bearer ${settings.token.trim()}`;
+  return {
+    url: `${settings.baseUrl.replace(/\/+$/, "")}/v1/audio/speech`,
+    init: {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: settings.model,
+        input,
+        voice,
+        response_format: settings.responseFormat,
+      }),
+    },
+  };
+}
+
+export interface SpeakOptions {
+  settings?: TtsSettings;
+  characterId?: string | null | undefined;
+  seat?: number | undefined;
+}
+
+export function speak(text: string, lang: Lang, options: SpeakOptions = {}): void {
+  const input = text.trim();
+  if (!input) return;
+  const generation = speechGeneration;
+  speechQueue = speechQueue.then(async () => {
+    if (generation !== speechGeneration) return;
+    await speakOnce(input, lang, options);
+  });
+}
+
+async function speakOnce(text: string, lang: Lang, options: SpeakOptions): Promise<void> {
+  const settings = options.settings ?? DEFAULT_TTS_SETTINGS;
+  if (tailgateConfigured(settings)) {
+    try {
+      await speakWithTailgate(text, lang, settings, options.characterId);
+      return;
+    } catch {
+      // Fall through to browser speech. Tailgate can fail because of CORS,
+      // network, auth, timeout, or an unsupported browser audio format.
+    }
   }
-  window.speechSynthesis.speak(u);
+  speakWithBrowser(text, lang, options.seat);
 }
 
-/** Stop and clear everything currently queued/speaking. */
+async function speakWithTailgate(text: string, lang: Lang, settings: TtsSettings, characterId: string | null | undefined): Promise<void> {
+  if (typeof fetch !== "function") throw new Error("fetch is not available");
+  const voice = kokoroVoiceForCharacterId(characterId ?? "narrator", lang);
+  const controller = new AbortController();
+  activeController = controller;
+  const timeout = setTimeout(() => controller.abort(), TAILGATE_TTS_REQUEST_TIMEOUT_MS);
+  try {
+    const req = buildTailgateTtsRequest(settings, text, voice);
+    const response = await fetch(req.url, { ...req.init, signal: controller.signal });
+    if (!response.ok) throw new Error(`TTS HTTP ${response.status}`);
+    const audio = await response.blob();
+    await playAudioBlob(audio);
+  } finally {
+    clearTimeout(timeout);
+    if (activeController === controller) activeController = null;
+  }
+}
+
+async function playAudioBlob(blob: Blob): Promise<void> {
+  if (typeof Audio === "undefined" || typeof URL === "undefined") throw new Error("Audio playback is not available");
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  currentAudio = audio;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      audio.onended = () => resolve();
+      audio.onerror = () => reject(new Error("audio playback failed"));
+      const playing = audio.play();
+      if (playing) playing.catch(reject);
+    });
+  } finally {
+    if (currentAudio === audio) currentAudio = null;
+    URL.revokeObjectURL(url);
+  }
+}
+
+function speakWithBrowser(text: string, lang: Lang, seat?: number): void {
+  if (!browserTtsSupported()) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang === "zh" ? "zh-CN" : "en-US";
+  const voices = voicesFor(lang);
+  if (seat != null) {
+    if (voices.length) utterance.voice = voices[(seat - 1) % voices.length] ?? null;
+    utterance.pitch = SEAT_PITCH[(seat - 1) % SEAT_PITCH.length] ?? 1;
+    utterance.rate = 1.08;
+  } else {
+    if (voices.length) utterance.voice = voices[0] ?? null;
+    utterance.pitch = 1;
+    utterance.rate = 1;
+  }
+  window.speechSynthesis.speak(utterance);
+}
+
 export function cancelSpeech(): void {
-  if (ttsSupported()) window.speechSynthesis.cancel();
+  speechGeneration += 1;
+  speechQueue = Promise.resolve();
+  activeController?.abort();
+  activeController = null;
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = "";
+    currentAudio = null;
+  }
+  if (browserTtsSupported()) window.speechSynthesis.cancel();
 }
 
-/** Resolves once nothing is speaking/queued (used to pace steps to the voice). */
-export function speechIdle(timeoutMs = 30_000): Promise<void> {
-  if (!ttsSupported()) return Promise.resolve();
-  const synth = window.speechSynthesis;
-  const startedAt = performance.now();
-  return new Promise((resolve) => {
+export async function speechIdle(timeoutMs = 30_000): Promise<void> {
+  const startedAt = now();
+  await Promise.race([speechQueue, wait(timeoutMs)]);
+  if (!browserTtsSupported()) return;
+  await new Promise<void>((resolve) => {
     const tick = () => {
-      if (!synth.speaking && !synth.pending) return resolve();
-      if (performance.now() - startedAt > timeoutMs) return resolve();
+      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) return resolve();
+      if (now() - startedAt > timeoutMs) return resolve();
       setTimeout(tick, 120);
     };
     tick();
   });
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function now(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
 }

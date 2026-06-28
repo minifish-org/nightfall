@@ -9,6 +9,7 @@ import type { ConnectionSettings } from "./settings.js";
 import { Pacer } from "./pacer.js";
 import { actorName, resolutionText } from "./i18n.js";
 import { cancelSpeech, speak, speechIdle } from "./tts.js";
+import { DEFAULT_TTS_SETTINGS, type TtsSettings } from "./tts-settings.js";
 import type { TimelineItem } from "./timeline.js";
 
 export type RunStatus = "idle" | "running" | "paused" | "done" | "error";
@@ -46,9 +47,13 @@ export function useGameRunner() {
   const humanResolveRef = useRef<((d: Decision) => void) | null>(null);
   // TTS on/off, read live by the running game's observer + gate.
   const ttsRef = useRef(false);
+  const ttsSettingsRef = useRef<TtsSettings>(DEFAULT_TTS_SETTINGS);
   const setTts = useCallback((on: boolean) => {
     ttsRef.current = on;
     if (!on) cancelSpeech();
+  }, []);
+  const setTtsSettings = useCallback((settings: TtsSettings) => {
+    ttsSettingsRef.current = settings;
   }, []);
 
   const submitHuman = useCallback((decision: Decision) => {
@@ -108,7 +113,9 @@ export function useGameRunner() {
       // Narrate ONLY public content (speeches, last words, deaths, banishes,
       // winner, day/night transitions) — never night actions or checks.
       const narrate = (text: string, seat?: number) => {
-        if (ttsRef.current) speak(text, lang, seat);
+        if (!ttsRef.current) return;
+        const characterId = seat == null ? "narrator" : identities?.[seat]?.id;
+        speak(text, lang, { settings: ttsSettingsRef.current, characterId, seat });
       };
 
       const observer: Observer = {
@@ -212,5 +219,5 @@ export function useGameRunner() {
   }, [state.game?.phase]);
   const setDelay = useCallback((ms: number) => pacerRef.current?.setDelay(ms), []);
 
-  return { ...state, start, pause, resume, step, stop, setDelay, submitHuman, setTts };
+  return { ...state, start, pause, resume, step, stop, setDelay, submitHuman, setTts, setTtsSettings };
 }

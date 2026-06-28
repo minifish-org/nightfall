@@ -4,6 +4,7 @@ import { DEFAULT_CONFIG, type SpectatorConfig } from "./config.js";
 import type { SeatIdentityMap } from "@orchestrator";
 import { Controls, ConfigForm, Timeline } from "./components.js";
 import { Settings } from "./SettingsPanel.js";
+import { TtsSettingsPanel } from "./TtsSettingsPanel.js";
 import { SpectatorTimeline } from "./SpectatorView.js";
 import { RoundTable, type TableSeat } from "./RoundTable.js";
 import { PhaseBanner } from "./PhaseBanner.js";
@@ -12,6 +13,7 @@ import { HumanPanel, HumanInfo } from "./HumanPanel.js";
 import { UI, type Lang } from "./i18n.js";
 import { characterForSeat, characterLabel, characterMapForHuman, characterName } from "./characters.js";
 import { ttsSupported } from "./tts.js";
+import { loadTtsSettings, saveTtsSettings, type TtsSettings } from "./tts-settings.js";
 import { publicTimeline, type PublicTimelineItem, type ViewMode } from "./spectate.js";
 import { loadConnection, saveConnection, type ConnectionSettings } from "./settings.js";
 import { useGameRunner } from "./useGameRunner.js";
@@ -58,6 +60,7 @@ function pubFocus(items: PublicTimelineItem[], lang: Lang, identities: SeatIdent
 export function App() {
   const [config, setConfig] = useState<SpectatorConfig>(DEFAULT_CONFIG);
   const [connection, setConnectionState] = useState<ConnectionSettings>(loadConnection);
+  const [ttsSettings, setTtsSettingsState] = useState<TtsSettings>(loadTtsSettings);
   const [mode, setMode] = useState<ViewMode>("god");
   const [revealed, setRevealed] = useState(false);
   const [ttsOn, setTtsOn] = useState(false);
@@ -70,10 +73,18 @@ export function App() {
   useEffect(() => {
     setTts(ttsOn);
   }, [ttsOn, setTts]);
+  const { setTtsSettings } = runner;
+  useEffect(() => {
+    setTtsSettings(ttsSettings);
+  }, [ttsSettings, setTtsSettings]);
 
   const setConnection = (c: ConnectionSettings) => {
     setConnectionState(c);
     saveConnection(c);
+  };
+  const setTtsSettingsAndSave = (settings: TtsSettings) => {
+    setTtsSettingsState(settings);
+    saveTtsSettings(settings);
   };
 
   const seedEditedRef = useRef(false);
@@ -136,6 +147,7 @@ export function App() {
       </header>
 
       <Settings settings={connection} onChange={setConnection} lang={lang} />
+      <TtsSettingsPanel settings={ttsSettings} onChange={setTtsSettingsAndSave} lang={lang} />
 
       <ConfigForm config={config} onChange={handleConfigChange} disabled={playing} />
       <Controls
@@ -157,11 +169,11 @@ export function App() {
           </button>
         ))}
         {mode === "spectator" && <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{t.spectatorNote}</span>}
-        {ttsSupported() && (
+        {ttsSupported(ttsSettings) && (
           <button
             className={`nf-toggle${ttsOn ? " is-on" : ""}`}
             onClick={() => setTtsOn((v) => !v)}
-            title="实验性:用浏览器内置语音朗读公开发言/事件"
+            title={lang === "zh" ? "朗读公开发言/事件" : "Narrate public speech and events"}
             style={{ marginLeft: "auto" }}
           >
             {t.tts}
