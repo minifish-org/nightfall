@@ -5,7 +5,7 @@ import type { GameState, SeatState } from "./types.js";
 /**
  * Build a fresh game. Deterministic: the same (seed) always deals the same
  * roles, so games are reproducible and replayable. `gameId` defaults to
- * `g<seed>` and feeds the stable agentd seat lane (game/<gameId>/seat/<n>).
+ * `g<seed>` and feeds the stable agentd seat scope (game/<gameId>/seat/<n>).
  */
 export function createGame(seed: number, gameId = `g${seed}`): GameState {
   const rng = makeRng(seed);

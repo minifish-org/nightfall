@@ -26,13 +26,13 @@ describe("AgentdClient tenant API", () => {
       run_id: "run-1",
       status: "succeeded",
       timed_out: false,
-      output: { final_decision: { action: "vote", target: "nahida" } },
+      output: { action: "vote", target: "nahida" },
     }), { status: 200, headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
     const client = new AgentdClient({ baseUrl: "https://agentd.example", tenant: "werewolf" });
     const payload = { phase: "day_vote", valid_targets: [{ id: "nahida" }] };
 
-    await expect(client.submitTurn({ agentRef: "werewolf-seer", scope: "game/1/seat/1/attempt/1", lane: "game/1/seat/1", payload })).resolves.toMatchObject({
+    await expect(client.submitTurn({ agentRef: "werewolf-seer", scope: "game/1/seat/1", payload })).resolves.toMatchObject({
       runId: "run-1",
       status: "succeeded",
       finalDecision: { action: "vote", target: "nahida" },
@@ -44,8 +44,7 @@ describe("AgentdClient tenant API", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({
       agent: "werewolf-seer",
-      scope: "game/1/seat/1/attempt/1",
-      lane: "game/1/seat/1",
+      scope: "game/1/seat/1",
       payload,
       wait: true,
       timeout_ms: 60000,

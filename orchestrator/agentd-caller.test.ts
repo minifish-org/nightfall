@@ -31,7 +31,7 @@ const identities: SeatIdentityMap = {
 };
 
 describe("createAgentdCaller — retry on unusable response", () => {
-  it("retries past a null final_decision and returns the next good one", async () => {
+  it("retries past a null output and returns the next good one", async () => {
     const { client, submitTurn } = stubClient([
       { finalDecision: null }, // attempt 1: agentd plan.generate rejected non-JSON → null
       { finalDecision: { action: "check", target: 1, say: "", reason: "ok" } }, // attempt 2
@@ -108,7 +108,7 @@ describe("createAgentdCaller — retry on unusable response", () => {
     expect(submitTurn).toHaveBeenCalledTimes(2);
   });
 
-  it("retries a phase-illegal action with isolated scopes on one stable lane", async () => {
+  it("retries a phase-illegal action in the same stable game/seat scope", async () => {
     const { client, submitTurn } = stubClient([
       { finalDecision: { action: "speak", target: null, say: "还想继续发言", reason: "wrong phase" } },
       { finalDecision: { action: "vote", target: 2, say: "", reason: "fixed" } },
@@ -117,12 +117,10 @@ describe("createAgentdCaller — retry on unusable response", () => {
 
     await expect(caller(reqFor(1, "day_vote"))).resolves.toMatchObject({ action: "vote", target: 2 });
     expect(submitTurn).toHaveBeenCalledTimes(2);
-    const first = (submitTurn.mock.calls as unknown[][])[0]![0] as { scope: string; lane: string; payload: Record<string, unknown> };
-    const second = (submitTurn.mock.calls as unknown[][])[1]![0] as { scope: string; lane: string; payload: Record<string, unknown> };
-    expect(first.lane).toBe("game/g/seat/1");
-    expect(second.lane).toBe(first.lane);
-    expect(first.scope).toBe("game/g/seat/1/day/1/phase/day_vote/attempt/1");
-    expect(second.scope).toBe("game/g/seat/1/day/1/phase/day_vote/attempt/2");
+    const first = (submitTurn.mock.calls as unknown[][])[0]![0] as { scope: string; payload: Record<string, unknown> };
+    const second = (submitTurn.mock.calls as unknown[][])[1]![0] as { scope: string; payload: Record<string, unknown> };
+    expect(first.scope).toBe("game/g/seat/1");
+    expect(second.scope).toBe(first.scope);
     expect(first.payload).toMatchObject({ allowed_actions: ["vote", "abstain"] });
     expect(second.payload).toMatchObject({ previous_error: 'illegal action "speak" in day_vote' });
   });

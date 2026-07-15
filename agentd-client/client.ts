@@ -36,7 +36,6 @@ export type ConnectionTest =
 export interface SubmitTurnArgs {
   agentRef: string;
   scope: string;
-  lane?: string;
   payload: unknown;
   wait?: boolean;
   timeoutMs?: number;
@@ -118,7 +117,6 @@ export class AgentdClient {
     const body = {
       agent: args.agentRef,
       scope: args.scope,
-      ...(args.lane ? { lane: args.lane } : {}),
       payload: args.payload,
       wait: args.wait ?? true,
       timeout_ms: timeoutMs,
@@ -144,7 +142,7 @@ export class AgentdClient {
       run_id?: string;
       status?: string;
       timed_out?: boolean;
-      output?: { final_decision?: unknown };
+      output?: unknown;
     };
 
     return {
@@ -152,7 +150,7 @@ export class AgentdClient {
       status: json.status ?? null,
       timedOut: Boolean(json.timed_out),
       output: json.output ?? null,
-      finalDecision: coerceDecision(json.output?.final_decision),
+      finalDecision: coerceDecision(json.output),
     };
   }
 }

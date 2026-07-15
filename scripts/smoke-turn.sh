@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Smoke-test one character turn against a running agentd with a
-# sample projected roleplay view and print the agent's final_decision. Use this to
+# sample projected roleplay view and print the agent's output. Use this to
 # confirm the contract end-to-end before wiring the UI.
 #
 #   AGENTD_URL=http://127.0.0.1:8080 TENANT=werewolf AGENT_REF=werewolf-seer ./scripts/smoke-turn.sh
@@ -61,4 +61,4 @@ curl -sS -X POST "${AGENTD_URL}/v1/tenants/${TENANT}/turns" \
   "timeout_ms": 30000
 }
 JSON
-)" | { command -v jq >/dev/null 2>&1 && jq '{run_id, status, timed_out, final_decision: .output.final_decision}' || cat; }
+)" | { command -v jq >/dev/null 2>&1 && jq '{run_id, status, timed_out, output}' || cat; }

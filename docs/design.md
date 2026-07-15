@@ -49,7 +49,7 @@ compatibility wrapper.
 `valid_targets` by (phase, role): seer@night = living non-self; wolf@night =
 living non-wolves; vote = living non-self; discuss = `[]`.
 
-### Seat → referee (the agent's final JSON, surfaced as `final_decision`)
+### Seat → referee (the agent's final JSON, surfaced directly as `output`)
 
 ```jsonc
 { "action": "check"|"kill"|"speak"|"vote"|"abstain", "target": 5, "say": "...", "reason": "..." }

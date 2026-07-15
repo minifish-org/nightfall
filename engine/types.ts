@@ -2,7 +2,7 @@
 //
 // These types ARE the contract from docs/design.md §2. The view shape and the
 // decision shape here are what flow over agentd (as payload / the returned
-// final_decision); agentd only passes them through.
+// output); agentd only passes them through.
 
 export type Role = "wolf" | "seer" | "villager";
 /** Good = town. Seer check results and victory are expressed in factions. */

@@ -8,7 +8,7 @@ const ACTIONS: ReadonlySet<Action> = new Set(["check", "kill", "speak", "vote", 
 
 export interface AgentdCallerConfig {
   client: AgentdClient;
-  /** Feeds the stable seat lane game/<gameId>/seat/<n>. */
+  /** Feeds the stable seat scope game/<gameId>/seat/<n>. */
   gameId: string;
   /** Optional role → agent_ref overrides (the UI's agent_ref pool). */
   pool?: Partial<Record<Role, string>>;
@@ -34,14 +34,14 @@ export interface AgentdCallerConfig {
 /**
  * Concrete AgentCaller backed by a live agentd. Sends the projected view as
  * `payload`, validates phase actions and targets, and retries unusable results.
- * Attempts use isolated context scopes on one stable seat lane. If all attempts
- * fail it throws, so the orchestrator degrades and marks the step errored.
+ * A seat reuses one scope for the whole game, so its most recent decision is
+ * available as context. A new game id starts with an empty scope.
  */
 export function createAgentdCaller(cfg: AgentdCallerConfig): AgentCaller {
   const attempts = Math.max(1, (cfg.retries ?? 2) + 1);
-  return async ({ seat, role, view, phase, day }) => {
+  return async ({ seat, role, view, phase }) => {
     const agentRef = roleAgentRef(role, cfg.pool);
-    const lane = seatScope(cfg.gameId, seat);
+    const scope = seatScope(cfg.gameId, seat);
     const lang = cfg.lang ?? "zh";
     const actor = cfg.identities?.[seat] ? (lang === "en" ? cfg.identities[seat].en : cfg.identities[seat].zh) : `seat ${seat}`;
     const allowedActions = legalActions(phase);
@@ -51,15 +51,10 @@ export function createAgentdCaller(cfg: AgentdCallerConfig): AgentCaller {
     let lastError: Error = new Error(`${actor} produced no decision`);
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
-        // Nightfall sends a complete projected state every turn, so rolling
-        // chat context is redundant and can bias a vote toward the preceding
-        // discussion. Isolate every attempt while keeping a stable seat lane.
-        const scope = `${lane}/day/${day}/phase/${phase}/attempt/${attempt}`;
         const payload = attempt === 1 ? input : { ...input, previous_error: lastError.message };
         const res = await cfg.client.submitTurn({
           agentRef,
           scope,
-          lane,
           payload,
           wait: true,
           ...(cfg.timeoutMs !== undefined ? { timeoutMs: cfg.timeoutMs } : {}),
@@ -90,7 +85,7 @@ function validateDecision(decision: Decision, phase: Phase, validTargets: number
   return decision;
 }
 
-/** Map a tolerantly-decoded final_decision into a strict Decision, or throw. */
+/** Map a tolerantly-decoded run output into a strict Decision, or throw. */
 function toDecision(raw: Record<string, unknown> | null, identities?: SeatIdentityMap): Decision {
   if (!raw) throw new Error("agent emitted no decision");
   const action = raw.action;

@@ -1,7 +1,7 @@
 /**
  * Tolerant decoder for a seat's decision.
  *
- * agentd records the agent's final JSON as the run's `final_decision`. The host
+ * agentd records the agent's final JSON directly as the run's `output`. The host
  * provider is an LLM, so even though we ask for a
  * bare JSON object the model sometimes wraps it in a ```json fence or prepends
  * prose. This salvages a JSON object from any of those shapes. It never throws;

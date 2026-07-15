@@ -85,7 +85,7 @@ for each phase until game_over:
   proposals so far (`ctx.wolfIntents` → `private.teammate_intents`). `ctx` is
   transient and never stored; `reduce` stays the sole authority and re-derives
   everything from the collected decisions (speeches appended exactly once).
-- Seat → referee: the agent's final JSON becomes `final_decision`,
+- Seat → referee: the agent's final JSON becomes the run `output`,
   shape `{ action, target, say, reason }` with `action ∈ {check, kill, speak,
   vote, abstain}` — the only five verbs.
 - **Output language is dynamic, no re-registration.** The personas are
@@ -109,7 +109,7 @@ pnpm vitest run engine/projection.test.ts  # one file
 pnpm vitest run -t "information hiding"     # one test by name
 pnpm typecheck                             # tsc --noEmit
 pnpm build                                 # typecheck + production build
-pnpm smoke                                 # POST one sample turn, print final_decision
+pnpm smoke                                 # POST one sample turn, print output
 ```
 
 Default tenant is **`demo`**. The `werewolf-*` agents are defined and registered
