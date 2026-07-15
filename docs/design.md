@@ -21,11 +21,11 @@ game live, with no game rules in the React layer.
 
 ## 2. Contract (defined here; agentd only passes it through)
 
-### Referee → seat (the `POST /v1/turns` payload is `{ input: <view> }`)
+### Referee → seat (`POST /v1/tenants/:tenant/turns`, `payload` is the view)
 
-agentd's built-in generic agent reads `payload.input` as the model's user
-content, so the view is nested under `input`. (agentd dropped wasm; the generic
-agent is native, selected by `artifact_uri = "builtin://generic-agent"`.)
+agentd places the submitted payload under `input` in its run envelope. Nightfall
+therefore sends the projected view directly as `payload`, without another
+compatibility wrapper.
 
 ```jsonc
 {
@@ -49,7 +49,7 @@ agent is native, selected by `artifact_uri = "builtin://generic-agent"`.)
 `valid_targets` by (phase, role): seer@night = living non-self; wolf@night =
 living non-wolves; vote = living non-self; discuss = `[]`.
 
-### Seat → referee (the agent's single `output.emit`, surfaced as `final_decision`)
+### Seat → referee (the agent's final JSON, surfaced as `final_decision`)
 
 ```jsonc
 { "action": "check"|"kill"|"speak"|"vote"|"abstain", "target": 5, "say": "...", "reason": "..." }
@@ -74,14 +74,14 @@ orchestrator/  env-agnostic async driver (imports engine only in run.ts)
   types.ts       AgentCaller, Observer, GameEvent, RunOptions
   run.ts         runGame({ state, agentCaller, observer, options })
   agentd-caller.ts  createAgentdCaller(client, …): AgentCaller (imports engine+client)
-agentd-client/ HTTP only — POST /v1/turns, tolerant JSON decode
+agentd-client/ HTTP only — tenant-scoped turns, tolerant JSON decode
 app/           React spectator (Goal 2) — renders observer events, zero rules
 scripts/
-  smoke-turn.sh        probe one /v1/turns against agentd
+  smoke-turn.sh        probe one tenant-scoped turn against agentd
   play.ts              Node CLI: createGame → runGame → transcript
 ```
 
-The `werewolf-wolf/seer/villager` agents (persona + model) are defined and
+The `werewolf-wolf/seer/villager/judge` agents (persona + model) are defined and
 registered in the **agentd repo**, not here. Nightfall only maps role →
 agent_ref (`engine/agent-map.ts`) and consumes them over HTTP.
 

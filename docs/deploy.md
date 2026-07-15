@@ -76,8 +76,8 @@ only.
       recommended) or a public tunnel if you need outside access
 - [ ] play from a device in your tailnet (so the `*.ts.net` host resolves)
 - [ ] agentd auth on; share the token out-of-band (not in the build)
-- [ ] the 3 seat agents registered in the target tenant (do it in-app via
-      **Settings → 初始化座位** once connected)
+- [ ] `werewolf-seer`, `werewolf-villager`, `werewolf-wolf`, and
+      `werewolf-judge` registered in the target tenant by the agentd deployment
 - [ ] Pages project: build `pnpm build`, output `dist`, Node 20
 - [ ] (optional) `VITE_AGENTD_BASE_URL` build var for a pre-filled URL
 - [ ] open the deployed URL → Settings → Test connection → green → play

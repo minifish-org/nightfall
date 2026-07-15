@@ -1,4 +1,4 @@
-import { roleAgentRef, type GameState, type Role } from "@engine";
+import { type GameState, type Role } from "@engine";
 import type { AgentdClient } from "@agentd";
 import { resolveCharacterTarget, type SeatIdentityMap } from "@orchestrator";
 import { characterForSeat, characterLabel } from "./characters.js";
@@ -41,39 +41,6 @@ export function buildRecap(timeline: TimelineItem[], lang: Lang, identities?: Se
   return lines;
 }
 
-function mvpPrompt(lang: Lang, characterMode = false): string {
-  if (lang === "zh") {
-    if (characterMode) {
-      return [
-        "这是一局已经结束的 AI 狼人杀的完整公开复盘(身份已揭晓)。你是评委。",
-        "综合:发言逻辑、投票合理性、对本方阵营的贡献或欺骗水平,投票选出【本局最佳表现】和【最差表现】各一个角色。",
-        "input 含:winner(获胜阵营)、players(角色/身份/结局)、events(逐回合公开事件)、you(你自己的角色,best 尽量别投自己)。",
-        '只输出一个 JSON 对象,无多余文字、无 markdown:{ "best": "character_id", "worst": "character_id", "reason": "不超过30字的理由" }。best 与 worst 必须是 players 里的角色 id。',
-      ].join("\n");
-    }
-    return [
-      "这是一局已经结束的 AI 狼人杀的完整公开复盘(身份已揭晓)。你是评委。",
-      "综合:发言逻辑、投票合理性、对本方阵营的贡献或欺骗水平,投票选出【本局最佳表现】和【最差表现】各一个座位。",
-      "input 含:winner(获胜阵营)、seats(座位号/角色/结局)、events(逐回合公开事件)、you(你自己的座位,best 尽量别投自己)。",
-      '只输出一个 JSON 对象,无多余文字、无 markdown:{ "best": 座位号, "worst": 座位号, "reason": "不超过30字的理由" }。best 与 worst 必须是有效座位号。',
-    ].join("\n");
-  }
-  if (characterMode) {
-    return [
-      "This is the full public recap of a finished AI Werewolf game (roles revealed). You are a judge.",
-      "Considering speech logic, voting soundness, and contribution/deception for one's faction, vote for the single BEST and single WORST performer by character.",
-      "input has: winner, players (character/role/fate), events (round-by-round public log), you (your own character; avoid voting yourself best).",
-      'Output ONE JSON object only, no prose, no markdown: { "best": "character_id", "worst": "character_id", "reason": "<=20 words" }. best/worst must be valid player character ids.',
-    ].join("\n");
-  }
-  return [
-    "This is the full public recap of a finished AI Werewolf game (roles revealed). You are a judge.",
-    "Considering speech logic, voting soundness, and contribution/deception for one's faction, vote for the single BEST and single WORST performer (seat numbers).",
-    "input has: winner, seats (seat/role/fate), events (round-by-round public log), you (your own seat; avoid voting yourself best).",
-    'Output ONE JSON object only, no prose, no markdown: { "best": <seat>, "worst": <seat>, "reason": "<=20 words" }. best/worst must be valid seat numbers.',
-  ].join("\n");
-}
-
 export interface MvpVote {
   voter: number;
   best: number;
@@ -99,8 +66,7 @@ export function tallyVotes(votes: MvpVote[]): Pick<MvpResult, "bestTally" | "wor
 
 /**
  * AI peer vote: each AI seat casts one MVP/worst ballot via a one-off agentd
- * turn (system_prompt override turns the generic agent into a judge — no new
- * agent registration). The local human seat is SKIPPED here — the human casts
+ * turn on the registered werewolf-judge agent. The local human seat is SKIPPED here — the human casts
  * their own ballot in the UI. Runs concurrently; unparseable ballots skipped.
  */
 export async function voteMvp(
@@ -118,7 +84,6 @@ export async function voteMvp(
   );
   const events = buildRecap(timeline, lang, identities);
   const winner = game.winner;
-  const prompt = mvpPrompt(lang, identities !== undefined);
   const seatNums = game.seats.map((s) => s.seat);
   const voters = game.seats.filter((s) => s.seat !== skipSeat);
   const parsePick = (raw: unknown): number | null => {
@@ -133,12 +98,9 @@ export async function voteMvp(
     voters.map(async (s) => {
       try {
         const res = await client.submitTurn({
-          agentRef: roleAgentRef(s.role),
+          agentRef: "werewolf-judge",
           scope: `game/${game.game_id}/mvp/${s.seat}`,
-          payload: {
-            input: { winner, players, events, you: identities ? characterForSeat(identities, s.seat) : s.seat, lang },
-            system_prompt: prompt,
-          },
+          payload: { winner, players, events, you: identities ? characterForSeat(identities, s.seat) : s.seat, lang },
           wait: true,
         });
         const d = res.finalDecision;

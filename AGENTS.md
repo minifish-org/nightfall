@@ -14,12 +14,12 @@ component that ever sees it in full.
 
 1. **Never modify, fork, or embed agentd.** It lives in a separate repo
    (`/Users/yusp/work/agentd`) and is consumed over HTTP only. **agentd owns the
-   agent definitions** — the `werewolf-wolf/seer/villager` agents (persona +
-   model, on agentd's `builtin://generic-agent`) are defined and registered in
+   agent definitions** — the `werewolf-wolf/seer/villager/judge` agents (persona +
+   model) are defined and registered in
    the agentd repo, NOT here. Nightfall does not write or apply manifests; it
-   only maps `role → agent_ref` (`engine/agent-map.ts`), sends the projected
-   view, and reads the decision. Zero werewolf rules go into agentd — a seat is
-   a stateless brain: decision = f(persona, view).
+   only maps `role → agent name` (`engine/agent-map.ts`), sends the projected
+   view, and reads the decision. Game state and rule enforcement never go into
+   agentd — a seat is a brain: decision = f(persona, view).
 2. **The referee is the single authority and the only holder of full state.**
    Each seat receives only a **view projection** (`engine/projection.ts`,
    `viewFor`) — an allowlist of what it may know. This is the information-hiding
@@ -43,7 +43,7 @@ for each phase until game_over:
   currentActors(state)              → seats that act now, seat-ascending   [engine]
   for each actor (sequential):
     viewFor(state, seat)            → projected view (the ONLY thing sent)  [engine]
-    agentCaller({ phase, seat, role, view }) → POST /v1/turns              [agentd]
+    agentCaller({ phase, seat, role, view }) → POST /v1/tenants/:tenant/turns [agentd]
       (throw/invalid → fallbackDecision + onSeatDecision{error})
   reduce(state, decisions)          → next state + ResolutionEvents        [engine]
 ```
@@ -71,8 +71,8 @@ for each phase until game_over:
 
 ## The contract (defined here; agentd only passes it through)
 
-- Referee → seat: `POST /v1/turns` with `payload = { input: <SeatView> }`.
-  agentd's built-in generic agent reads `payload.input` as the model's content.
+- Referee → seat: `POST /v1/tenants/:tenant/turns` with `payload = <SeatView>`.
+  agentd places that payload under `input` in the model's run envelope.
   View shape =
   `{ phase, game_id, day, you:{seat,role}, setup:{seats,roles}, alive_seats,
   dead_seats, public_log, private, valid_targets }`; `private` is `{teammates,
@@ -85,13 +85,12 @@ for each phase until game_over:
   proposals so far (`ctx.wolfIntents` → `private.teammate_intents`). `ctx` is
   transient and never stored; `reduce` stays the sole authority and re-derives
   everything from the collected decisions (speeches appended exactly once).
-- Seat → referee: the agent's single `output.emit` becomes `final_decision`,
+- Seat → referee: the agent's final JSON becomes `final_decision`,
   shape `{ action, target, say, reason }` with `action ∈ {check, kill, speak,
   vote, abstain}` — the only five verbs.
 - **Output language is dynamic, no re-registration.** The personas are
   registered once with "reply in the language given by `input.lang`"; the
-  referee sets it per turn — `agentd-caller` sends `payload.input = { ...view,
-  lang }` (the agent forwards only `payload.input`, so `lang` rides inside it).
+  referee sets it per turn — `agentd-caller` sends `payload = { ...view, lang }`.
   The UI language toggle drives both the UI strings (`app/i18n.ts`) and the
   `lang` sent, fixed per game at Start. `viewFor` stays pure rules — the caller,
   not the engine, attaches `lang`.

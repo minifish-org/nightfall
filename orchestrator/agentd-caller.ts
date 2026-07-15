@@ -16,15 +16,15 @@ export interface AgentdCallerConfig {
   identities?: SeatIdentityMap;
   timeoutMs?: number;
   /**
-   * Language tag the agent should reply in, sent inside payload.input as
-   * `input.lang`. The (registered-once) persona is instructed to honor it, so
+   * Language tag the agent should reply in, sent as `payload.lang`. The
+   * registered persona is instructed to honor `input.lang` in agentd's run
+   * envelope, so
    * switching language needs NO agent re-registration. Defaults to "zh".
    */
   lang?: string;
   /**
    * Extra attempts when a turn yields no usable decision. The common failure is
-   * agentd's `plan.generate` rejecting a non-JSON LLM reply ("response did not
-   * contain valid JSON object") → the run Fails → final_decision is null. With
+   * an LLM returning an unusable decision. With
    * temperature > 0 a fresh attempt usually parses, so we retry before giving up
    * (which would degrade the seat to a fallback). Default 2 (→ 3 attempts).
    */
@@ -33,42 +33,28 @@ export interface AgentdCallerConfig {
 
 /**
  * Concrete AgentCaller backed by a live agentd. Sends the projected view as
- * `payload.input` (the shape agentd's generic agent reads) and coerces the emitted
+ * the projected view as `payload` and coerces the returned
  * final_decision into a Decision. Retries a few times on an unusable response;
  * if all attempts fail it throws, so the orchestrator degrades and marks the
  * step errored.
  */
-/** Per-turn persona override so the dead seat produces proper last words —
- *  the registered personas don't know the `last_words` phase. */
-function lastWordsPrompt(lang?: string): string {
-  if (lang === "en") {
-    return 'You have been eliminated. These are your LAST WORDS — one final public statement everyone hears (you may claim seer, reveal checks, rally your side, or flip). Use character names, never seat numbers. Output ONE JSON object only: {"action":"speak","target":null,"say":"<your last words>","reason":"<private>"}.';
-  }
-  return '你在本局已经出局。这是你的【遗言】——最后一次公开发言,全场都会听到(可以跳预言家/报验人、留警徽流、为阵营喊话或反水)。称呼玩家时使用角色名,不要使用座位号。只输出一个 JSON 对象,无多余文字:{"action":"speak","target":null,"say":"你的遗言","reason":"私有思考"}。';
-}
-
 export function createAgentdCaller(cfg: AgentdCallerConfig): AgentCaller {
   const attempts = Math.max(1, (cfg.retries ?? 2) + 1);
-  return async ({ seat, role, view, phase }) => {
+  return async ({ seat, role, view }) => {
     const agentRef = roleAgentRef(role, cfg.pool);
     const scope = seatScope(cfg.gameId, seat);
     const lang = cfg.lang ?? "zh";
     const actor = cfg.identities?.[seat] ? (lang === "en" ? cfg.identities[seat].en : cfg.identities[seat].zh) : `seat ${seat}`;
-    // `lang` rides inside `input` because agentd's generic agent forwards only
-    // payload.input to the model. For last words, a system_prompt override
-    // turns the role persona into a "say your final words" prompt.
+    // `lang` rides inside `input`; the registered role persona handles every
+    // phase, including last_words.
     const input = cfg.identities ? { ...toCharacterView(view, cfg.identities, lang), lang } : { ...view, lang };
-    const payload =
-      phase === "last_words"
-        ? { input, system_prompt: lastWordsPrompt(cfg.lang) }
-        : { input };
     let lastError: Error = new Error(`${actor} produced no decision`);
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
         const res = await cfg.client.submitTurn({
           agentRef,
           scope,
-          payload,
+          payload: input,
           wait: true,
           ...(cfg.timeoutMs !== undefined ? { timeoutMs: cfg.timeoutMs } : {}),
         });

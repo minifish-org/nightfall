@@ -11,7 +11,7 @@ authoritative game state and decides what each AI seat is allowed to see.
 │                         │ per seat, per phase                              │
 │              projected view (only what that seat may know)                 │
 └─────────────────────────│──────────────────────────────────────────────────┘
-                          ▼  POST /v1/turns  { payload: { input: <view> } }
+                          ▼  POST /v1/tenants/:tenant/turns  { payload: <view> }
                    ┌──────────────┐   external, never modified
                    │   agentd     │   agent brains (persona + view → decision)
                    └──────────────┘
@@ -19,12 +19,12 @@ authoritative game state and decides what each AI seat is allowed to see.
 
 - **The referee is the only component that sees full state.** Each seat's
   "thinking" is one HTTP call to **agentd**; the referee sends only that seat's
-  **projected view** as `payload.input` and reads back a structured decision
+  **projected view** as `payload` and reads back a structured decision
   from `output.final_decision`.
 - **agentd is an external dependency** (`/Users/yusp/work/agentd`), consumed over
   HTTP only — never forked, embedded, or taught any werewolf rules. agentd owns
-  the `werewolf-*` agent definitions (persona + model); nightfall only picks the
-  `agent_ref` per role and never writes or registers manifests.
+  the `werewolf-*` agent definitions (persona + model); Nightfall only picks the
+  agent name per role and never writes agent configuration.
 - The Node CLI and the browser spectator reuse the **same** engine + orchestrator
   — the game loop is written once.
 
@@ -40,31 +40,31 @@ removes good's information). Full design in [docs/design.md](docs/design.md).
 | ---------------- | ----------------------------------------------------------------- |
 | `engine/`        | Pure-TS referee core: setup, phase FSM, **view projection**, resolution, victory, deterministic replay. No DOM/network. |
 | `orchestrator/`  | Environment-agnostic `runGame({ state, agentCaller, observer, options })` + the agentd-backed `agentCaller`. |
-| `agentd-client/` | HTTP client for `POST /v1/turns` + tolerant decision decoding.    |
+| `agentd-client/` | HTTP client for tenant-scoped turns + tolerant decision decoding. |
 | `app/`           | React spectator (god-view, timeline, playback controls). No game rules. |
 | `scripts/`       | `smoke-turn.sh`, `play.ts` (CLI runner).                          |
 
-The `werewolf-wolf/seer/villager` agents (persona + model) live in the **agentd
+The `werewolf-wolf/seer/villager/judge` agents (persona + model) live in the **agentd
 repo**, not here — nightfall only maps `role → agent_ref` in
 `engine/agent-map.ts`.
 
 ## Prerequisites
 
 - Node 18+ and `pnpm` (`npm i -g pnpm`).
-- A running **agentd** with the `werewolf-wolf/seer/villager` agents registered
-  (they're defined in the agentd repo, on `builtin://generic-agent`) and an
+- A running **agentd** with the `werewolf-wolf/seer/villager/judge` agents registered
+  (they're defined in the agentd repo) and an
   OpenAI-compatible LLM provider configured — all on the agentd side, not here.
 
 ## Run against local agentd (`http://127.0.0.1:8080`)
 
-The default tenant is **`demo`**. Nightfall references the agents by `agent_ref`
+The default tenant is **`werewolf`**. Nightfall references the agents by name
 (`werewolf-wolf/seer/villager`) — it does not define or register them; that's
 done in the agentd repo.
 
 **1. Smoke-test one turn** end-to-end (confirms agentd is up and the agent answers):
 
 ```bash
-pnpm smoke                 # POST /v1/turns with a sample seer view, prints final_decision
+pnpm smoke                 # POST a tenant-scoped turn and print final_decision
 ```
 
 **2a. Play a full game headless (CLI)** — prints a transcript:

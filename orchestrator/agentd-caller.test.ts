@@ -66,7 +66,7 @@ describe("createAgentdCaller — retry on unusable response", () => {
     const decision = await caller(reqFor(1));
 
     expect(decision).toMatchObject({ action: "check", target: 4 });
-    const input = ((submitTurn.mock.calls as unknown[][])[0]![0] as { payload: { input: Record<string, unknown> } }).payload.input;
+    const input = ((submitTurn.mock.calls as unknown[][])[0]![0] as { payload: Record<string, unknown> }).payload;
     expect(input).toHaveProperty("alive_characters");
     expect(input).not.toHaveProperty("alive_seats");
     expect(input).not.toHaveProperty("dead_seats");

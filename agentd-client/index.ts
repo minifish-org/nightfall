@@ -1,7 +1,6 @@
 export { AgentdClient } from "./client.js";
 export type {
   AgentdClientOptions,
-  AgentManifest,
   AgentSummary,
   ConnectionTest,
   SubmitTurnArgs,

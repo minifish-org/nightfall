@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
-# Smoke-test one character turn against a running agentd: POST /v1/turns with a
+# Smoke-test one character turn against a running agentd with a
 # sample projected roleplay view and print the agent's final_decision. Use this to
 # confirm the contract end-to-end before wiring the UI.
 #
-#   AGENTD_URL=http://127.0.0.1:8080 TENANT=demo AGENT_REF=werewolf-seer ./scripts/smoke-turn.sh
+#   AGENTD_URL=http://127.0.0.1:8080 TENANT=werewolf AGENT_REF=werewolf-seer ./scripts/smoke-turn.sh
 set -euo pipefail
 
 AGENTD_URL="${AGENTD_URL:-http://127.0.0.1:8080}"
-TENANT="${TENANT:-demo}"
+TENANT="${TENANT:-werewolf}"
 AGENT_REF="${AGENT_REF:-werewolf-seer}"
 SCOPE="${SCOPE:-game/smoke/player/nahida}"
 
-# A sample seer night view — the roleplay shape sent as payload.input.
+# A sample seer night view — sent directly as payload.
 read -r -d '' PAYLOAD <<'JSON' || true
 {
-  "input": {
     "phase": "night_seer",
     "game_id": "smoke",
     "day": 1,
@@ -43,17 +42,19 @@ read -r -d '' PAYLOAD <<'JSON' || true
       "instruction": "你正在扮演纳西妲。公开发言请称呼其他玩家的角色名,不要使用座位号。如果需要选择目标,target 必须严格填写 valid_targets[].id 里的一个 id。"
     },
     "lang": "zh"
-  }
 }
 JSON
 
-echo "==> POST ${AGENTD_URL}/v1/turns  (tenant=${TENANT} agent_ref=${AGENT_REF} scope=${SCOPE})"
-curl -sS -X POST "${AGENTD_URL}/v1/turns" \
+auth=()
+test -z "${AGENTD_TOKEN:-}" || auth=(-H "Authorization: Bearer ${AGENTD_TOKEN}")
+
+echo "==> POST ${AGENTD_URL}/v1/tenants/${TENANT}/turns  (agent=${AGENT_REF} scope=${SCOPE})"
+curl -sS -X POST "${AGENTD_URL}/v1/tenants/${TENANT}/turns" \
+  "${auth[@]}" \
   -H 'content-type: application/json' \
   -d "$(cat <<JSON
 {
-  "tenant": "${TENANT}",
-  "agent_ref": "${AGENT_REF}",
+  "agent": "${AGENT_REF}",
   "scope": "${SCOPE}",
   "payload": ${PAYLOAD},
   "wait": true,

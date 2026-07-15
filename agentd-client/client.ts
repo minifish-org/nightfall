@@ -7,8 +7,8 @@ import { coerceDecision } from "./parse.js";
  * targets the configured `tenant`.
  *
  * Surface used by Nightfall:
- *  - submitTurn   POST /v1/turns          drive one seat (payload.input = view)
- *  - testConnection / listAgents / applyAgent / deleteAgent — the Settings UI
+ *  - submitTurn   POST /v1/tenants/:tenant/turns  drive one seat
+ *  - testConnection / listAgents                   read-only Settings UI
  */
 export interface AgentdClientOptions {
   /** e.g. "http://127.0.0.1:8080" locally, or the Tailscale HTTPS URL in prod. */
@@ -21,24 +21,11 @@ export interface AgentdClientOptions {
   defaultTimeoutMs?: number;
 }
 
-/** A registered agent as returned by GET /v1/agents. */
+/** A registered agent as returned by GET /v1/tenants/:tenant/agents. */
 export interface AgentSummary {
   name: string;
   tenant: string;
-  spec?: { artifact_uri?: string; model?: string | null; system_prompt?: string | null };
-}
-
-/** The body POSTed to /v1/agents/apply. */
-export interface AgentManifest {
-  apiVersion: "agentd/v2alpha1";
-  kind: "Agent";
-  metadata: { name: string; tenant: string };
-  spec: {
-    artifact_uri: string;
-    model?: string;
-    system_prompt?: string;
-    limits?: { timeout_ms: number; memory_mb: number; max_steps: number };
-  };
+  model?: string | null;
 }
 
 /** Result of a connection probe, with the failure mode distinguished. */
@@ -52,7 +39,6 @@ export interface SubmitTurnArgs {
   payload: unknown;
   wait?: boolean;
   timeoutMs?: number;
-  labels?: Record<string, string>;
 }
 
 export interface TurnResult {
@@ -89,12 +75,16 @@ export class AgentdClient {
     return u.toString();
   }
 
+  private tenantPath(path: string): string {
+    return `/v1/tenants/${encodeURIComponent(this.tenant)}${path}`;
+  }
+
   /** Probe connectivity + auth. Never throws; classifies the failure. */
   async testConnection(timeoutMs = 10_000): Promise<ConnectionTest> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(this.url("/v1/agents", { tenant: this.tenant }), {
+      const res = await fetch(this.url(this.tenantPath("/agents")), {
         headers: this.headers(false),
         signal: ctrl.signal,
       });
@@ -113,52 +103,30 @@ export class AgentdClient {
     }
   }
 
-  /** GET /v1/agents?tenant= — agents registered under the configured tenant. */
+  /** Agents registered under the configured tenant. */
   async listAgents(): Promise<AgentSummary[]> {
-    const res = await fetch(this.url("/v1/agents", { tenant: this.tenant }), { headers: this.headers(false) });
-    if (!res.ok) throw new Error(`GET /v1/agents → ${res.status} ${await res.text()}`);
+    const res = await fetch(this.url(this.tenantPath("/agents")), { headers: this.headers(false) });
+    if (!res.ok) throw new Error(`GET agents → ${res.status} ${await res.text()}`);
     const data = (await res.json()) as AgentSummary[];
     return Array.isArray(data) ? data : [];
   }
 
-  /** POST /v1/agents/apply — register/update one agent (manifest as JSON body). */
-  async applyAgent(manifest: AgentManifest): Promise<{ name: string; tenant: string }> {
-    const res = await fetch(this.url("/v1/agents/apply"), {
-      method: "POST",
-      headers: this.headers(true),
-      body: JSON.stringify(manifest),
-    });
-    if (!res.ok) throw new Error(`POST /v1/agents/apply (${manifest.metadata.name}) → ${res.status} ${await res.text()}`);
-    return (await res.json()) as { name: string; tenant: string };
-  }
-
-  /** DELETE /v1/agents/<name>?tenant= */
-  async deleteAgent(name: string): Promise<void> {
-    const res = await fetch(this.url(`/v1/agents/${encodeURIComponent(name)}`, { tenant: this.tenant }), {
-      method: "DELETE",
-      headers: this.headers(false),
-    });
-    if (!res.ok && res.status !== 404) throw new Error(`DELETE /v1/agents/${name} → ${res.status} ${await res.text()}`);
-  }
-
-  /** POST /v1/turns — drive one seat's decision. */
+  /** Drive one seat's decision. */
   async submitTurn(args: SubmitTurnArgs): Promise<TurnResult> {
     const timeoutMs = args.timeoutMs ?? this.defaultTimeoutMs;
     const body = {
-      tenant: this.tenant,
-      agent_ref: args.agentRef,
+      agent: args.agentRef,
       scope: args.scope,
       payload: args.payload,
       wait: args.wait ?? true,
       timeout_ms: timeoutMs,
-      ...(args.labels ? { labels: args.labels } : {}),
     };
 
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs + 5_000);
     let res: Response;
     try {
-      res = await fetch(this.url("/v1/turns"), {
+      res = await fetch(this.url(this.tenantPath("/turns")), {
         method: "POST",
         headers: this.headers(true),
         body: JSON.stringify(body),
@@ -168,7 +136,7 @@ export class AgentdClient {
       clearTimeout(timer);
     }
 
-    if (!res.ok) throw new Error(`agentd POST /v1/turns → ${res.status} ${await res.text()}`);
+    if (!res.ok) throw new Error(`agentd POST turn → ${res.status} ${await res.text()}`);
 
     const json = (await res.json()) as {
       run_id?: string;

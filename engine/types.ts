@@ -1,7 +1,7 @@
 // Core domain types for the referee. No DOM, no network — pure data.
 //
 // These types ARE the contract from docs/design.md §2. The view shape and the
-// decision shape here are what flow over agentd (as payload.input / the emitted
+// decision shape here are what flow over agentd (as payload / the returned
 // final_decision); agentd only passes them through.
 
 export type Role = "wolf" | "seer" | "villager";
@@ -27,7 +27,7 @@ export type DeathPhase = "night_wolf" | "day_vote";
 /** The five — and only five — action verbs a seat may emit. */
 export type Action = "check" | "kill" | "speak" | "vote" | "abstain";
 
-/** A seat's decision, as returned by the agent's single output.emit. */
+/** A seat's decision, returned as the agent's final JSON object. */
 export interface Decision {
   action: Action;
   target: number | null;

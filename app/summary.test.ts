@@ -32,14 +32,18 @@ describe("buildRecap", () => {
   it("maps MVP character id ballots back to internal seats", async () => {
     const identities = characterMapForHuman(null);
     const game = { ...createGame(7), winner: "good" as const };
+    const calls: unknown[] = [];
     const client = {
-      submitTurn: async () => ({
-        runId: "r",
-        status: "Succeeded",
-        timedOut: false,
-        output: null,
-        finalDecision: { best: "nahida", worst: "zhongli", reason: "角色表现差异明显" },
-      }),
+      submitTurn: async (args: unknown) => {
+        calls.push(args);
+        return {
+          runId: "r",
+          status: "succeeded",
+          timedOut: false,
+          output: null,
+          finalDecision: { best: "nahida", worst: "zhongli", reason: "角色表现差异明显" },
+        };
+      },
     } as unknown as AgentdClient;
 
     await expect(voteMvp(client, game, [], "zh", null, identities)).resolves.toEqual([
@@ -50,5 +54,12 @@ describe("buildRecap", () => {
       { voter: 5, best: 4, worst: 2, reason: "角色表现差异明显" },
       { voter: 6, best: 4, worst: 2, reason: "角色表现差异明显" },
     ]);
+    expect(calls).toHaveLength(6);
+    expect(calls[0]).toMatchObject({
+      agentRef: "werewolf-judge",
+      payload: { winner: "good", lang: "zh" },
+    });
+    expect((calls[0] as { payload: Record<string, unknown> }).payload).not.toHaveProperty("input");
+    expect((calls[0] as { payload: Record<string, unknown> }).payload).not.toHaveProperty("system_prompt");
   });
 });
