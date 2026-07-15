@@ -7,7 +7,7 @@ import { coerceDecision } from "./parse.js";
  * targets the configured `tenant`.
  *
  * Surface used by Nightfall:
- *  - submitTurn   POST /v1/tenants/:tenant/turns  drive one seat
+ *  - submitTurn   POST a run, then GET its wait endpoint to drive one seat
  *  - testConnection / listAgents                   read-only Settings UI
  */
 export interface AgentdClientOptions {
@@ -37,7 +37,6 @@ export interface SubmitTurnArgs {
   agentRef: string;
   scope: string;
   payload: unknown;
-  wait?: boolean;
   timeoutMs?: number;
 }
 
@@ -118,27 +117,42 @@ export class AgentdClient {
       agent: args.agentRef,
       scope: args.scope,
       payload: args.payload,
-      wait: args.wait ?? true,
-      timeout_ms: timeoutMs,
     };
 
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs + 5_000);
-    let res: Response;
+    const submitCtrl = new AbortController();
+    const submitTimer = setTimeout(() => submitCtrl.abort(), Math.min(timeoutMs + 5_000, 15_000));
+    let submitRes: Response;
     try {
-      res = await fetch(this.url(this.tenantPath("/turns")), {
+      submitRes = await fetch(this.url(this.tenantPath("/turns")), {
         method: "POST",
         headers: this.headers(true),
         body: JSON.stringify(body),
-        signal: ctrl.signal,
+        signal: submitCtrl.signal,
       });
     } finally {
-      clearTimeout(timer);
+      clearTimeout(submitTimer);
     }
 
-    if (!res.ok) throw new Error(`agentd POST turn → ${res.status} ${await res.text()}`);
+    if (!submitRes.ok) throw new Error(`agentd POST turn → ${submitRes.status} ${await submitRes.text()}`);
+    const submitted = (await submitRes.json()) as { run_id?: string };
+    if (!submitted.run_id) throw new Error("agentd POST turn returned no run_id");
 
-    const json = (await res.json()) as {
+    const waitCtrl = new AbortController();
+    const waitTimer = setTimeout(() => waitCtrl.abort(), timeoutMs + 5_000);
+    let waitRes: Response;
+    try {
+      waitRes = await fetch(this.url(this.tenantPath(`/runs/${encodeURIComponent(submitted.run_id)}/wait`), {
+        timeout_ms: String(timeoutMs),
+      }), {
+        headers: this.headers(false),
+        signal: waitCtrl.signal,
+      });
+    } finally {
+      clearTimeout(waitTimer);
+    }
+
+    if (!waitRes.ok) throw new Error(`agentd GET run wait → ${waitRes.status} ${await waitRes.text()}`);
+    const json = (await waitRes.json()) as {
       run_id?: string;
       status?: string;
       timed_out?: boolean;
@@ -146,7 +160,7 @@ export class AgentdClient {
     };
 
     return {
-      runId: json.run_id ?? "",
+      runId: json.run_id ?? submitted.run_id,
       status: json.status ?? null,
       timedOut: Boolean(json.timed_out),
       output: json.output ?? null,

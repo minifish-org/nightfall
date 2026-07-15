@@ -101,7 +101,6 @@ export async function voteMvp(
           agentRef: "werewolf-judge",
           scope: `game/${game.game_id}/mvp/${s.seat}`,
           payload: { winner, players, events, you: identities ? characterForSeat(identities, s.seat) : s.seat, lang },
-          wait: true,
         });
         const d = res.finalDecision;
         const best = parsePick(d?.best);

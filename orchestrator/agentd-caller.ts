@@ -56,7 +56,6 @@ export function createAgentdCaller(cfg: AgentdCallerConfig): AgentCaller {
           agentRef,
           scope,
           payload,
-          wait: true,
           ...(cfg.timeoutMs !== undefined ? { timeoutMs: cfg.timeoutMs } : {}),
         });
         if (res.timedOut) throw new Error(`${actor} timed out`);

@@ -11,7 +11,7 @@ authoritative game state and decides what each AI seat is allowed to see.
 │                         │ per seat, per phase                              │
 │              projected view (only what that seat may know)                 │
 └─────────────────────────│──────────────────────────────────────────────────┘
-                          ▼  POST /v1/tenants/:tenant/turns  { payload: <view> }
+                          ▼  POST turn → GET run wait  { payload: <view> }
                    ┌──────────────┐   external, never modified
                    │   agentd     │   agent brains (persona + view → decision)
                    └──────────────┘
@@ -19,8 +19,8 @@ authoritative game state and decides what each AI seat is allowed to see.
 
 - **The referee is the only component that sees full state.** Each seat's
   "thinking" is one HTTP call to **agentd**; the referee sends only that seat's
-  **projected view** as `payload` and reads back a structured decision
-  directly from `output`.
+  **projected view** as `payload`, then pulls the run's structured decision
+  from its canonical `output`. It does not request an outbox delivery.
 - **agentd is an external dependency** (`/Users/yusp/work/agentd`), consumed over
   HTTP only — never forked, embedded, or taught any werewolf rules. agentd owns
   the `werewolf-*` agent definitions (persona + model); Nightfall only picks the
@@ -64,7 +64,7 @@ done in the agentd repo.
 **1. Smoke-test one turn** end-to-end (confirms agentd is up and the agent answers):
 
 ```bash
-pnpm smoke                 # POST a tenant-scoped turn and print output
+pnpm smoke                 # submit a tenant-scoped turn, wait, and print output
 ```
 
 **2a. Play a full game headless (CLI)** — prints a transcript:

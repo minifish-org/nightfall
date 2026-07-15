@@ -22,12 +22,17 @@ describe("AgentdClient tenant API", () => {
   });
 
   it("submits only the current tenant-scoped turn shape", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      run_id: "run-1",
-      status: "succeeded",
-      timed_out: false,
-      output: { action: "vote", target: "nahida" },
-    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        run_id: "run-1",
+        status: "queued",
+      }), { status: 202, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        run_id: "run-1",
+        status: "succeeded",
+        timed_out: false,
+        output: { action: "vote", target: "nahida" },
+      }), { status: 200, headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
     const client = new AgentdClient({ baseUrl: "https://agentd.example", tenant: "werewolf" });
     const payload = { phase: "day_vote", valid_targets: [{ id: "nahida" }] };
@@ -38,7 +43,7 @@ describe("AgentdClient tenant API", () => {
       finalDecision: { action: "vote", target: "nahida" },
     });
 
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://agentd.example/v1/tenants/werewolf/turns");
     expect(init.method).toBe("POST");
@@ -46,8 +51,9 @@ describe("AgentdClient tenant API", () => {
       agent: "werewolf-seer",
       scope: "game/1/seat/1",
       payload,
-      wait: true,
-      timeout_ms: 60000,
     });
+    const [waitUrl, waitInit] = fetchMock.mock.calls[1]!;
+    expect(waitUrl).toBe("https://agentd.example/v1/tenants/werewolf/runs/run-1/wait?timeout_ms=60000");
+    expect(waitInit.method).toBeUndefined();
   });
 });

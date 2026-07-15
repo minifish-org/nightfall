@@ -25,7 +25,8 @@ game live, with no game rules in the React layer.
 
 agentd places the submitted payload under `input` in its run envelope. Nightfall
 therefore sends the projected view directly as `payload`, without another
-compatibility wrapper.
+compatibility wrapper. Submission returns a queued `run_id`; Nightfall then
+pulls `GET .../runs/:id/wait` and does not request an outbox delivery.
 
 ```jsonc
 {

@@ -43,7 +43,7 @@ for each phase until game_over:
   currentActors(state)              → seats that act now, seat-ascending   [engine]
   for each actor (sequential):
     viewFor(state, seat)            → projected view (the ONLY thing sent)  [engine]
-    agentCaller({ phase, seat, role, view }) → POST /v1/tenants/:tenant/turns [agentd]
+    agentCaller({ phase, seat, role, view }) → POST turn → GET run wait [agentd]
       (throw/invalid → fallbackDecision + onSeatDecision{error})
   reduce(state, decisions)          → next state + ResolutionEvents        [engine]
 ```
@@ -72,7 +72,9 @@ for each phase until game_over:
 ## The contract (defined here; agentd only passes it through)
 
 - Referee → seat: `POST /v1/tenants/:tenant/turns` with `payload = <SeatView>`.
-  agentd places that payload under `input` in the model's run envelope.
+  The POST returns a queued `run_id`; Nightfall then calls the tenant-scoped
+  run wait endpoint and reads its canonical output. It does not request an
+  outbox delivery. agentd places the payload under `input` in the run envelope.
   View shape =
   `{ phase, game_id, day, you:{seat,role}, setup:{seats,roles}, alive_seats,
   dead_seats, public_log, private, valid_targets }`; `private` is `{teammates,
@@ -109,7 +111,7 @@ pnpm vitest run engine/projection.test.ts  # one file
 pnpm vitest run -t "information hiding"     # one test by name
 pnpm typecheck                             # tsc --noEmit
 pnpm build                                 # typecheck + production build
-pnpm smoke                                 # POST one sample turn, print output
+pnpm smoke                                 # submit one sample turn, wait, print output
 ```
 
 Default tenant is **`demo`**. The `werewolf-*` agents are defined and registered

@@ -47,18 +47,23 @@ JSON
 
 auth=()
 test -z "${AGENTD_TOKEN:-}" || auth=(-H "Authorization: Bearer ${AGENTD_TOKEN}")
+command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
 
 echo "==> POST ${AGENTD_URL}/v1/tenants/${TENANT}/turns  (agent=${AGENT_REF} scope=${SCOPE})"
-curl -sS -X POST "${AGENTD_URL}/v1/tenants/${TENANT}/turns" \
+submitted=$(curl -sS -X POST "${AGENTD_URL}/v1/tenants/${TENANT}/turns" \
   "${auth[@]}" \
   -H 'content-type: application/json' \
   -d "$(cat <<JSON
 {
   "agent": "${AGENT_REF}",
   "scope": "${SCOPE}",
-  "payload": ${PAYLOAD},
-  "wait": true,
-  "timeout_ms": 30000
+  "payload": ${PAYLOAD}
 }
 JSON
-)" | { command -v jq >/dev/null 2>&1 && jq '{run_id, status, timed_out, output}' || cat; }
+)")
+run_id=$(printf '%s' "$submitted" | jq -er '.run_id')
+printf '%s' "$submitted" | jq '{run_id, status}'
+
+echo "==> GET ${AGENTD_URL}/v1/tenants/${TENANT}/runs/${run_id}/wait"
+curl -sS "${AGENTD_URL}/v1/tenants/${TENANT}/runs/${run_id}/wait?timeout_ms=30000" \
+  "${auth[@]}" | jq '{run_id, status, timed_out, output}'
