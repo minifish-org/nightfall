@@ -61,7 +61,7 @@ export function Settings({
         <legend>{t.legend}</legend>
         <div style={grid}>
           <label>{t.baseUrl}</label>
-          <input value={settings.baseUrl} onChange={(event) => set("baseUrl", event.target.value)} placeholder="http://127.0.0.1:8080" />
+          <input value={settings.baseUrl} onChange={(event) => set("baseUrl", event.target.value)} placeholder="https://minifish-home.taila2cd17.ts.net" />
           <label>{t.token}</label>
           <input type="password" value={settings.token} onChange={(event) => set("token", event.target.value)} autoComplete="off" />
           <label>{t.tenant}</label>

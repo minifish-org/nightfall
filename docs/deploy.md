@@ -28,6 +28,11 @@ tailscale serve --bg 8080          # → https://<machine>.<tailnet>.ts.net (val
 Net effect: the static UI is public on Pages, but agentd and the whole game only
 work from your tailnet devices (token adds another layer). Use this, not Funnel.
 
+The checked-in production default is
+`https://minifish-home.taila2cd17.ts.net`. The settings loader automatically
+moves the retired `macbook-air-for-home` URL to this endpoint while preserving
+the browser-local token and tenant.
+
 **Only if you want it reachable outside your tailnet:** `tailscale funnel 8080`
 (public), `cloudflared tunnel --url http://127.0.0.1:8080`, or a TLS reverse
 proxy — then anyone with the URL + token can play.
@@ -57,9 +62,9 @@ Manual deploy (no Git): `pnpm build && npx wrangler pages deploy dist`
 
 Two ways to point the deployed app at your agentd:
 
-1. **Per-user (default, most flexible):** the user opens **Settings**, enters the
-   agentd HTTPS baseUrl + token + tenant; it persists to localStorage. Ship with
-   no baked defaults and let each user fill them in.
+1. **Per-user (default, most flexible):** the user opens **Settings**, confirms
+   the pre-filled agentd HTTPS baseUrl, and enters the token + tenant; it
+   persists to localStorage.
 2. **Baked default baseUrl:** set a Pages **build env var**
    `VITE_AGENTD_BASE_URL=https://<machine>.<tailnet>.ts.net` (and optionally
    `VITE_AGENTD_TENANT=werewolf`) so Settings is pre-filled with your tailnet
