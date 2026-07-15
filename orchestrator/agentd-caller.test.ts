@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentdClient } from "../agentd-client/index.js";
-import { createGame, viewFor } from "../engine/index.js";
+import { createGame, viewFor, type Phase } from "../engine/index.js";
 import { createAgentdCaller } from "./agentd-caller.js";
 import type { SeatIdentityMap } from "./identity-view.js";
 
@@ -15,8 +15,9 @@ function stubClient(results: Array<{ timedOut?: boolean; finalDecision: Record<s
   return { client: { submitTurn } as unknown as AgentdClient, submitTurn };
 }
 
-const reqFor = (seat: number) => {
-  const state = createGame(7);
+const reqFor = (seat: number, phase?: Phase) => {
+  const initial = createGame(7);
+  const state = phase ? { ...initial, phase } : initial;
   return { phase: state.phase, day: state.day, seat, role: state.seats.find((s) => s.seat === seat)!.role, view: viewFor(state, seat) };
 };
 
@@ -42,12 +43,13 @@ describe("createAgentdCaller — retry on unusable response", () => {
   });
 
   it("retries past a timeout", async () => {
+    const req = reqFor(2, "night_wolf");
     const { client, submitTurn } = stubClient([
       { timedOut: true, finalDecision: null },
-      { finalDecision: { action: "kill", target: 2, say: "", reason: "" } },
+      { finalDecision: { action: "kill", target: req.view.valid_targets[0], say: "", reason: "" } },
     ]);
     const caller = createAgentdCaller({ client, gameId: "g", retries: 2 });
-    expect((await caller(reqFor(2))).action).toBe("kill");
+    expect((await caller(req)).action).toBe("kill");
     expect(submitTurn).toHaveBeenCalledTimes(2);
   });
 
@@ -63,7 +65,7 @@ describe("createAgentdCaller — retry on unusable response", () => {
       { finalDecision: { action: "check", target: "nahida", say: "", reason: "ok" } },
     ]);
     const caller = createAgentdCaller({ client, gameId: "g", retries: 0, identities, lang: "zh" });
-    const decision = await caller(reqFor(1));
+    const decision = await caller(reqFor(3));
 
     expect(decision).toMatchObject({ action: "check", target: 4 });
     const input = ((submitTurn.mock.calls as unknown[][])[0]![0] as { payload: Record<string, unknown> }).payload;
@@ -71,7 +73,8 @@ describe("createAgentdCaller — retry on unusable response", () => {
     expect(input).not.toHaveProperty("alive_seats");
     expect(input).not.toHaveProperty("dead_seats");
     expect(input).toMatchObject({
-      you: { character: { id: "venti", zh: "温迪" } },
+      allowed_actions: ["check"],
+      you: { character: { id: "raiden_shogun", zh: "雷电将军" } },
       roleplay: expect.objectContaining({ target_format: "character_id" }),
     });
   });
@@ -80,8 +83,8 @@ describe("createAgentdCaller — retry on unusable response", () => {
     const zh = stubClient([{ finalDecision: { action: "vote", target: "纳西妲", say: "", reason: "" } }]);
     const en = stubClient([{ finalDecision: { action: "vote", target: "Nahida", say: "", reason: "" } }]);
 
-    await expect(createAgentdCaller({ client: zh.client, gameId: "g", retries: 0, identities, lang: "zh" })(reqFor(1))).resolves.toMatchObject({ target: 4 });
-    await expect(createAgentdCaller({ client: en.client, gameId: "g", retries: 0, identities, lang: "en" })(reqFor(1))).resolves.toMatchObject({ target: 4 });
+    await expect(createAgentdCaller({ client: zh.client, gameId: "g", retries: 0, identities, lang: "zh" })(reqFor(1, "day_vote"))).resolves.toMatchObject({ target: 4 });
+    await expect(createAgentdCaller({ client: en.client, gameId: "g", retries: 0, identities, lang: "en" })(reqFor(1, "day_vote"))).resolves.toMatchObject({ target: 4 });
   });
 
   it("rejects numeric targets in character mode so a retry can repair them", async () => {
@@ -91,7 +94,7 @@ describe("createAgentdCaller — retry on unusable response", () => {
     ]);
     const caller = createAgentdCaller({ client, gameId: "g", retries: 1, identities, lang: "zh" });
 
-    await expect(caller(reqFor(1))).resolves.toMatchObject({ action: "vote", target: 4 });
+    await expect(caller(reqFor(1, "day_vote"))).resolves.toMatchObject({ action: "vote", target: 4 });
     expect(submitTurn).toHaveBeenCalledTimes(2);
   });
 
@@ -101,7 +104,37 @@ describe("createAgentdCaller — retry on unusable response", () => {
     ]);
     const caller = createAgentdCaller({ client, gameId: "g", retries: 1, identities, lang: "zh" });
 
-    await expect(caller(reqFor(1))).rejects.toThrow(/character target/i);
+    await expect(caller(reqFor(1, "day_vote"))).rejects.toThrow(/character target/i);
+    expect(submitTurn).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a phase-illegal action with isolated scopes on one stable lane", async () => {
+    const { client, submitTurn } = stubClient([
+      { finalDecision: { action: "speak", target: null, say: "还想继续发言", reason: "wrong phase" } },
+      { finalDecision: { action: "vote", target: 2, say: "", reason: "fixed" } },
+    ]);
+    const caller = createAgentdCaller({ client, gameId: "g", retries: 1 });
+
+    await expect(caller(reqFor(1, "day_vote"))).resolves.toMatchObject({ action: "vote", target: 2 });
+    expect(submitTurn).toHaveBeenCalledTimes(2);
+    const first = (submitTurn.mock.calls as unknown[][])[0]![0] as { scope: string; lane: string; payload: Record<string, unknown> };
+    const second = (submitTurn.mock.calls as unknown[][])[1]![0] as { scope: string; lane: string; payload: Record<string, unknown> };
+    expect(first.lane).toBe("game/g/seat/1");
+    expect(second.lane).toBe(first.lane);
+    expect(first.scope).toBe("game/g/seat/1/day/1/phase/day_vote/attempt/1");
+    expect(second.scope).toBe("game/g/seat/1/day/1/phase/day_vote/attempt/2");
+    expect(first.payload).toMatchObject({ allowed_actions: ["vote", "abstain"] });
+    expect(second.payload).toMatchObject({ previous_error: 'illegal action "speak" in day_vote' });
+  });
+
+  it("retries a legal action with a target outside the projected allowlist", async () => {
+    const { client, submitTurn } = stubClient([
+      { finalDecision: { action: "vote", target: 99, say: "", reason: "bad target" } },
+      { finalDecision: { action: "vote", target: 2, say: "", reason: "fixed" } },
+    ]);
+    const caller = createAgentdCaller({ client, gameId: "g", retries: 1 });
+
+    await expect(caller(reqFor(1, "day_vote"))).resolves.toMatchObject({ action: "vote", target: 2 });
     expect(submitTurn).toHaveBeenCalledTimes(2);
   });
 });

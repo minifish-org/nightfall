@@ -36,6 +36,7 @@ export type ConnectionTest =
 export interface SubmitTurnArgs {
   agentRef: string;
   scope: string;
+  lane?: string;
   payload: unknown;
   wait?: boolean;
   timeoutMs?: number;
@@ -117,6 +118,7 @@ export class AgentdClient {
     const body = {
       agent: args.agentRef,
       scope: args.scope,
+      ...(args.lane ? { lane: args.lane } : {}),
       payload: args.payload,
       wait: args.wait ?? true,
       timeout_ms: timeoutMs,

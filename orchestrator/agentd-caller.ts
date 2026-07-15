@@ -1,6 +1,6 @@
 import { AgentdClient } from "../agentd-client/index.js";
-import { roleAgentRef, seatScope } from "../engine/index.js";
-import type { Action, Decision, Role } from "../engine/index.js";
+import { legalActions, roleAgentRef, seatScope } from "../engine/index.js";
+import type { Action, Decision, Phase, Role } from "../engine/index.js";
 import type { AgentCaller } from "./types.js";
 import { containsSeatReference, resolveCharacterTarget, toCharacterView, type SeatIdentityMap } from "./identity-view.js";
 
@@ -8,7 +8,7 @@ const ACTIONS: ReadonlySet<Action> = new Set(["check", "kill", "speak", "vote", 
 
 export interface AgentdCallerConfig {
   client: AgentdClient;
-  /** Feeds the seat scope game/<gameId>/seat/<n>. */
+  /** Feeds the stable seat lane game/<gameId>/seat/<n>. */
   gameId: string;
   /** Optional role → agent_ref overrides (the UI's agent_ref pool). */
   pool?: Partial<Record<Role, string>>;
@@ -33,33 +33,40 @@ export interface AgentdCallerConfig {
 
 /**
  * Concrete AgentCaller backed by a live agentd. Sends the projected view as
- * the projected view as `payload` and coerces the returned
- * final_decision into a Decision. Retries a few times on an unusable response;
- * if all attempts fail it throws, so the orchestrator degrades and marks the
- * step errored.
+ * `payload`, validates phase actions and targets, and retries unusable results.
+ * Attempts use isolated context scopes on one stable seat lane. If all attempts
+ * fail it throws, so the orchestrator degrades and marks the step errored.
  */
 export function createAgentdCaller(cfg: AgentdCallerConfig): AgentCaller {
   const attempts = Math.max(1, (cfg.retries ?? 2) + 1);
-  return async ({ seat, role, view }) => {
+  return async ({ seat, role, view, phase, day }) => {
     const agentRef = roleAgentRef(role, cfg.pool);
-    const scope = seatScope(cfg.gameId, seat);
+    const lane = seatScope(cfg.gameId, seat);
     const lang = cfg.lang ?? "zh";
     const actor = cfg.identities?.[seat] ? (lang === "en" ? cfg.identities[seat].en : cfg.identities[seat].zh) : `seat ${seat}`;
-    // `lang` rides inside `input`; the registered role persona handles every
-    // phase, including last_words.
-    const input = cfg.identities ? { ...toCharacterView(view, cfg.identities, lang), lang } : { ...view, lang };
+    const allowedActions = legalActions(phase);
+    const input = cfg.identities
+      ? { ...toCharacterView(view, cfg.identities, lang), lang, allowed_actions: allowedActions }
+      : { ...view, lang, allowed_actions: allowedActions };
     let lastError: Error = new Error(`${actor} produced no decision`);
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
+        // Nightfall sends a complete projected state every turn, so rolling
+        // chat context is redundant and can bias a vote toward the preceding
+        // discussion. Isolate every attempt while keeping a stable seat lane.
+        const scope = `${lane}/day/${day}/phase/${phase}/attempt/${attempt}`;
+        const payload = attempt === 1 ? input : { ...input, previous_error: lastError.message };
         const res = await cfg.client.submitTurn({
           agentRef,
           scope,
-          payload: input,
+          lane,
+          payload,
           wait: true,
           ...(cfg.timeoutMs !== undefined ? { timeoutMs: cfg.timeoutMs } : {}),
         });
         if (res.timedOut) throw new Error(`${actor} timed out`);
-        return toDecision(res.finalDecision, cfg.identities);
+        const decision = toDecision(res.finalDecision, cfg.identities);
+        return validateDecision(decision, phase, view.valid_targets);
       } catch (e) {
         lastError = e instanceof Error ? e : new Error(String(e));
         // Fall through to retry; a fresh sample usually yields valid JSON.
@@ -67,6 +74,20 @@ export function createAgentdCaller(cfg: AgentdCallerConfig): AgentCaller {
     }
     throw lastError;
   };
+}
+
+function validateDecision(decision: Decision, phase: Phase, validTargets: number[]): Decision {
+  if (!legalActions(phase).includes(decision.action)) {
+    throw new Error(`illegal action "${decision.action}" in ${phase}`);
+  }
+  const requiresTarget = decision.action === "check" || decision.action === "kill" || decision.action === "vote";
+  if (requiresTarget && (decision.target === null || !validTargets.includes(decision.target))) {
+    throw new Error(`illegal target ${JSON.stringify(decision.target)} for ${decision.action} in ${phase}`);
+  }
+  if (!requiresTarget && decision.target !== null) {
+    throw new Error(`action "${decision.action}" requires a null target in ${phase}`);
+  }
+  return decision;
 }
 
 /** Map a tolerantly-decoded final_decision into a strict Decision, or throw. */
