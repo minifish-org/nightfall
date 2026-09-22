@@ -13,7 +13,7 @@ component that ever sees it in full.
 ## The four hard rules (non-negotiable)
 
 1. **Never modify, fork, or embed agentd.** It lives in a separate repo
-   (`/Users/yusp/work/agentd`) and is consumed over HTTP only. **agentd owns the
+   ([minifish-org/agentd](https://github.com/minifish-org/agentd)) and is consumed over HTTP only. **agentd owns the
    agent definitions** — the `werewolf-wolf/seer/villager/judge` agents (persona +
    model) are defined and registered in
    the agentd repo, NOT here. Nightfall does not write or apply manifests; it

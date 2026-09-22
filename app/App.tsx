@@ -258,6 +258,7 @@ export function App() {
           )}
         </section>
       </div>
+      <footer style={{ textAlign: "center", fontSize: 12, padding: 12 }}><a href="https://github.com/minifish-org/nightfall">Source · AGPL-3.0</a></footer>
     </main>
   );
 }

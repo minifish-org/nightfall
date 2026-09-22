@@ -21,14 +21,14 @@ authoritative game state and decides what each AI seat is allowed to see.
   "thinking" is one HTTP call to **agentd**; the referee sends only that seat's
   **projected view** as `payload`, then pulls the run's structured decision
   from its canonical `output`. It does not request an outbox delivery.
-- **agentd is an external dependency** (`/Users/yusp/work/agentd`), consumed over
+- **agentd is an external dependency** ([minifish-org/agentd](https://github.com/minifish-org/agentd)), consumed over
   HTTP only — never forked, embedded, or taught any werewolf rules. agentd owns
   the `werewolf-*` agent definitions (persona + model); Nightfall only picks the
   agent name per role and never writes agent configuration.
 - The Node CLI and the browser spectator reuse the **same** engine + orchestrator
   — the game loop is written once.
 
-Board (see `/goal`): 6 seats — **2 wolf + 1 seer + 3 villager**, good 4 vs wolf 2,
+Default board: 6 seats — **2 wolf + 1 seer + 3 villager**, good 4 vs wolf 2,
 no role reveal on death. Round loop: `night_seer → night_wolf → day_discuss →
 day_vote → …`. Victory (屠民, checked after each death): wolves=0 → good wins;
 all 3 villagers dead → wolves win. Killing the seer doesn't end the game (it only
@@ -50,10 +50,24 @@ repo**, not here — nightfall only maps `role → agent_ref` in
 
 ## Prerequisites
 
-- Node 18+ and `pnpm` (`npm i -g pnpm`).
+- Node.js 22.12+ and `pnpm` (`npm i -g pnpm`).
 - A running **agentd** with the `werewolf-wolf/seer/villager/judge` agents registered
-  (they're defined in the agentd repo) and an
+  (see the [agentd agent definitions](https://github.com/minifish-org/agentd/tree/main/agents) and its [setup instructions](https://github.com/minifish-org/agentd#readme)) and an
   OpenAI-compatible LLM provider configured — all on the agentd side, not here.
+
+## Install
+
+```sh
+git clone https://github.com/minifish-org/nightfall.git
+cd nightfall
+corepack enable
+pnpm install --frozen-lockfile
+```
+
+This is an experimental operator-controlled game, not a secure multiplayer server.
+The operator can inspect every role in the browser. Live games require a separately
+configured agentd and provider account, and may incur provider charges. Unit tests
+use mocked agent calls and can run without an LLM. See [deployment](docs/deploy.md).
 
 ## Run against local agentd (`http://127.0.0.1:8080`)
 
@@ -100,3 +114,9 @@ The keystone test is `engine/projection.test.ts`: it asserts the
 information-hiding boundary — a wolf view carries `private.teammates`, villager
 and seer views do not; only the seer's view carries `private.checks`; and
 `public_log` never contains a role.
+
+## License and contributions
+
+Project code is licensed under [AGPL-3.0-only](LICENSE). Third-party dependencies
+and model assets retain their own licenses. See [CONTRIBUTING.md](CONTRIBUTING.md)
+and [SECURITY.md](SECURITY.md).

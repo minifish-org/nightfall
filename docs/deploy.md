@@ -28,18 +28,15 @@ tailscale serve --bg 8080          # → https://<machine>.<tailnet>.ts.net (val
 Net effect: the static UI is public on Pages, but agentd and the whole game only
 work from your tailnet devices (token adds another layer). Use this, not Funnel.
 
-The checked-in production default is
-`https://minifish-home.taila2cd17.ts.net`. The settings loader automatically
-moves the retired `macbook-air-for-home` URL to this endpoint while preserving
-the browser-local token and tenant.
+The checked-in default is `http://127.0.0.1:8080`. Set your own endpoint in
+Settings or with `VITE_AGENTD_BASE_URL`; no maintainer deployment is bundled.
 
 **Only if you want it reachable outside your tailnet:** `tailscale funnel 8080`
 (public), `cloudflared tunnel --url http://127.0.0.1:8080`, or a TLS reverse
 proxy — then anyone with the URL + token can play.
 
-CORS needs no work: agentd already returns
-`access-control-allow-origin/methods/headers: *` (verified), so the Pages origin
-and the `Authorization` header are allowed. Keep agentd auth ON (`api_token`);
+Configure your agentd deployment to allow the browser origin and Authorization
+header. CORS behavior depends on the agentd version and deployment. Keep agentd auth ON (`api_token`);
 users enter the token in **Settings** (stored only in their browser's localStorage).
 
 ## Deploy
@@ -51,7 +48,7 @@ Build settings (dashboard Git integration — recommended):
 | Framework preset | None / Vite  |
 | Build command    | `pnpm build` |
 | Output directory | `dist`       |
-| Node version     | `20` (pinned by `.node-version`) |
+| Node version     | `22` (pinned by `.node-version`) |
 
 pnpm is auto-detected from `packageManager` in `package.json` + the lockfile.
 
@@ -83,6 +80,6 @@ only.
 - [ ] agentd auth on; share the token out-of-band (not in the build)
 - [ ] `werewolf-seer`, `werewolf-villager`, `werewolf-wolf`, and
       `werewolf-judge` registered in the target tenant by the agentd deployment
-- [ ] Pages project: build `pnpm build`, output `dist`, Node 20
+- [ ] Pages project: build `pnpm build`, output `dist`, Node 22
 - [ ] (optional) `VITE_AGENTD_BASE_URL` build var for a pre-filled URL
 - [ ] open the deployed URL → Settings → Test connection → green → play
